@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -11,7 +13,6 @@ using namespace std;
 
 Client::Client()
 {
-  //TODO test if AF_INET is ok (server working via PF_INET)
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
@@ -77,15 +78,18 @@ const char* Client::make_message( string message )
 
   cout << "not normalized length = " << length << endl;
 
-  char* buffer;
-  buffer = reinterpret_cast<char*>( &length );
-  buffer[2] = '\0';
-  u_int16_t num_buf = *reinterpret_cast<u_int16_t*>( buffer );
-  cout << "come back = " << num_buf << endl;
+  char* buffer_for_num;
+  memcpy( buffer_for_num, reinterpret_cast<char*>(&length), 2);
+  buffer_for_num[2] =  '\0';
+  printf( "a = %s\n", buffer_for_num ); 
+  
+  u_int16_t new_length = *reinterpret_cast<u_int16_t*>( buffer_for_num );
+  cout << "come back = " << new_length << endl;
+  printf("a = %s\n", buffer_for_num);
+  //cout << "buf = " << buffer_for_num;
+  //cout << "buf len = " << string(buffer_for_num).length() << endl;
 
-  cout << "buf len = " << string(buffer).length() << endl;
-
-  result = string( buffer ) + message;
+  result =  string( buffer_for_num ) + message;
 
   cout << "normalized length = " << result.length() << endl;
 
