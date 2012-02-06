@@ -1,3 +1,6 @@
+# Compiled binary files
+*.out
+
 # Compiled Object files
 *.slo
 *.lo
@@ -10,5 +13,8 @@
 *.lai
 *.la
 *.a
+
+# Vim swap files
+*.swp
 
 /bin
