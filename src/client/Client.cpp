@@ -87,7 +87,6 @@ string Client::make_message( string message )
   cout << "TTTTTTTTTTTT\n";*/
   
   result = string( buffer, message.length() + 2 );
-  cout << "result = " << result << endl;
 
   return result;
 }
