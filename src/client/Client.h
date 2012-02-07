@@ -33,7 +33,7 @@ class Client
 
   private:
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
-  const char* make_message( string message );
+  string make_message( string message );
 };
 
 #endif

@@ -38,8 +38,8 @@ void Client::disconnect()
 
 void Client::send_message( string message )
 {
-  const char* norm_message = make_message( message );
-  if( write( client_socket, norm_message, strlen(norm_message) ) < 0 )
+  string norm_message = make_message( message );
+  if( write( client_socket, norm_message.c_str(), norm_message.length() ) < 0 )
   {
     cout << "ERROR: can not send message!";
   }
@@ -68,37 +68,26 @@ struct addrinfo* Client::get_addrinfo( const char* addr, const char* port )
   return result;
 }
 
-const char* Client::make_message( string message )
+string Client::make_message( string message )
 {
 
   u_int16_t length;
   string result;
+  char* buffer = new char[ message.length() + 2 ];
 
   length = static_cast<u_int16_t>( message.length() );
 
-  cout << "not normalized length = " << length << endl;
+  memcpy( buffer, &length, 2);
+  memcpy( &(buffer[2]), message.c_str(), message.length() );
 
-  char* buffer_for_num;
-  memcpy( buffer_for_num, reinterpret_cast<char*>(&length), 2);
-  buffer_for_num[2] =  '\0';
-  printf( "a = %s\n", buffer_for_num ); 
-  
-  u_int16_t new_length = *reinterpret_cast<u_int16_t*>( buffer_for_num );
-  cout << "come back = " << new_length << endl;
-  printf("a = %s\n", buffer_for_num);
-  //cout << "buf = " << buffer_for_num;
-  //cout << "buf len = " << string(buffer_for_num).length() << endl;
-
-  result =  string( buffer_for_num ) + message;
-
-  cout << "normalized length = " << result.length() << endl;
 
   /*strcpy( result, static_cast<const char*>( buffer ) );
   cout << "RRRRRRRRRRRR\n";
   strcpy( &(result[2]), message.c_str() );
   cout << "TTTTTTTTTTTT\n";*/
   
+  result = string( buffer, message.length() + 2 );
   cout << "result = " << result << endl;
 
-  return result.c_str();
+  return result;
 }
