@@ -1,5 +1,6 @@
 #include <sys/types.h>
-#include <sys/socket.h>
+
+#include "server.h"
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -11,7 +12,6 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
-#include "server.h"
 
 #define OK 0
 #define ERROR -1
