@@ -19,7 +19,7 @@ class Client
   void connect_to_server( const char* server_adress, const char* server_port );
   void disconnect();
   void send_message( string message );
-  string retrieve_message();
+  void secure_connection();
 
   private:
 
@@ -31,9 +31,10 @@ class Client
   //Address server_address;
   //PortNum server_port;
 
-  private:
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
   string make_message( string message );
+  string retrieve_message();
+  void send_raw_message( string message );
 };
 
 #endif

@@ -1,13 +1,14 @@
-#include <cstdio>
+#include "Client.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <netdb.h>
+#include <openssl/ssl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "Client.h"
 
 using namespace std;
 
@@ -36,7 +37,17 @@ void Client::disconnect()
 {
 }
 
+//TODO make secure! This ver - just for debug!
 void Client::send_message( string message )
+{
+  string norm_message = make_message( message );
+  if( write( client_socket, norm_message.c_str(), norm_message.length() ) < 0 )
+  {
+    cout << "ERROR: can not send message!";
+  }
+}
+
+void Client::send_raw_message( string message )
 {
   string norm_message = make_message( message );
   if( write( client_socket, norm_message.c_str(), norm_message.length() ) < 0 )
@@ -80,12 +91,6 @@ string Client::make_message( string message )
   memcpy( buffer, &length, 2);
   memcpy( &(buffer[2]), message.c_str(), message.length() );
 
-
-  /*strcpy( result, static_cast<const char*>( buffer ) );
-  cout << "RRRRRRRRRRRR\n";
-  strcpy( &(result[2]), message.c_str() );
-  cout << "TTTTTTTTTTTT\n";*/
-  
   result = string( buffer, message.length() + 2 );
 
   return result;
