@@ -5,10 +5,13 @@
 #include <cstring>
 #include <iostream>
 #include <netdb.h>
-#include <openssl/ssl.h>
+#include <openssl/crypto.h>
+#include <openssl/dh.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#define PRIME_NUM_LENGTH 43
+#define GENERATOR_NUM 5
 
 using namespace std;
 
@@ -17,6 +20,12 @@ Client::Client()
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
+ 
+  //char* buffer;
+  //buffer = BN_bn2dec( diffihellman_info->p );
+  //cout << "p = " << buffer << "\n";
+  //OPENSSL_free( buffer );
+  
 }
 
 Client::~Client()
@@ -31,6 +40,13 @@ void Client::connect_to_server( const char* server_address, const char* server_p
     cout << "ERROR: can not connect!\n";
     exit( -1 );
   }
+  secure_connection();
+}
+
+void Client::secure_connection()
+{
+  diffihellman_info = DH_generate_parameters( PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL );
+  send_raw_message( diffihellman_info, sizeof( &diffihellman_info ) );
 }
 
 void Client::disconnect()
@@ -40,17 +56,19 @@ void Client::disconnect()
 //TODO make secure! This ver - just for debug!
 void Client::send_message( string message )
 {
-  string norm_message = make_message( message );
-  if( write( client_socket, norm_message.c_str(), norm_message.length() ) < 0 )
-  {
-    cout << "ERROR: can not send message!";
-  }
+  char* buffer = const_cast<char*>(message.c_str());
+  send_raw_message(reinterpret_cast<void*>(buffer), static_cast<u_int16_t>(message.length()));
 }
 
-void Client::send_raw_message( string message )
+void Client::send_raw_message( void* data, u_int16_t length )
 {
-  string norm_message = make_message( message );
-  if( write( client_socket, norm_message.c_str(), norm_message.length() ) < 0 )
+
+  char* buffer = new char[length + sizeof(u_int16_t)];
+
+  memcpy(buffer, &length, sizeof(u_int16_t));
+  memcpy(&(buffer[sizeof(u_int16_t)]), data, length);
+  
+  if(write(client_socket, buffer, length+sizeof(u_int16_t)) < 0)
   {
     cout << "ERROR: can not send message!";
   }
@@ -75,23 +93,6 @@ struct addrinfo* Client::get_addrinfo( const char* addr, const char* port )
     cout << "ERROR: " << " Worng addr or port!\n";
     exit( -1 );
   }
-
-  return result;
-}
-
-string Client::make_message( string message )
-{
-
-  u_int16_t length;
-  string result;
-  char* buffer = new char[ message.length() + 2 ];
-
-  length = static_cast<u_int16_t>( message.length() );
-
-  memcpy( buffer, &length, 2);
-  memcpy( &(buffer[2]), message.c_str(), message.length() );
-
-  result = string( buffer, message.length() + 2 );
 
   return result;
 }
