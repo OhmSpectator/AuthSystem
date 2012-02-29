@@ -293,7 +293,7 @@ int run_server( int server_socket )
             {
               recv( current_descriptor, buffer, current_state_p->message_size, 0 );
               buffer[current_state_p->message_size] = '\0';
-              printf( "DEBUG: Got new message!\n%s\n", buffer );
+              printf( "DEBUG: Got full new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
               current_state_p->message_size_known= UNKNOWN;
             }
 
@@ -301,7 +301,7 @@ int run_server( int server_socket )
             {
               recv( current_descriptor, buffer, current_message_size, 0 );
               buffer[current_message_size] = '\0';
-              printf( "DEBUG: Got new message!\n============\n%s\n============\n", buffer );
+              printf( "DEBUG: Got new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
               current_state_p->message_size_known= UNKNOWN;
             }
           }
