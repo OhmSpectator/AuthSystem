@@ -1,7 +1,7 @@
 Requirements:
-
 libssl-dev package
 
 Compile:
+-lcrypto (agter source code files) option for g++
 
 Usage:
