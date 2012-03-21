@@ -2,7 +2,7 @@
 
 #include "Console.h"
 #include "Client.h"
-#include "NetTypes.h"
+#include "../NetTypes.h"
 
 using namespace std;
 
