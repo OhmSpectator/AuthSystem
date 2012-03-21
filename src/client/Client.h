@@ -1,7 +1,7 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
-#include "NetTypes.h"
+#include "../NetTypes.h"
 
 #include <openssl/dh.h>
 #include <string>
@@ -29,7 +29,7 @@ class Client
   bool connection_secured;
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
   string retrieve_message();
-  void send_raw_message( void* data, u_int16_t length );
+  void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   void secure_connection();
 };
 

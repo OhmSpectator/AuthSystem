@@ -1,5 +1,7 @@
 /* Structure to describe server state in interacton with a particular client*/
 
+#include "../NetTypes.h"
+
 #define KNOWN 1
 #define UNKNOWN 0
 
@@ -11,13 +13,6 @@ typedef enum s_id
   INIT_SEND,
   AES_KEY_CREATED	
 } state_id;
-
-typedef enum m_type
-{
-  DH_GIVE_ME_INIT,
-  DH_TAKE_INIT,
-  DH_TAKE_MY_BASE
-} message_type;
 
 typedef struct c_state
 {

@@ -46,7 +46,20 @@ void Client::connect_to_server( const char* server_address, const char* server_p
 void Client::secure_connection()
 {
   diffihellman_info = DH_generate_parameters( PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL );
-  send_raw_message( diffihellman_info, sizeof( &diffihellman_info ) );
+
+  send_raw_message(diffihellman_info, static_cast<u_int16_t>(sizeof(*diffihellman_info)), DH_TAKE_PRIME);
+  
+  /*
+  u_int16_t size = static_cast<u_int16_t>(sizeof(*diffihellman_info));
+  cout << "DEBUG: Sending " << size << " bytes...\n";
+  for(int i = 0; i < size; i++)
+  {
+    cout << (int)((reinterpret_cast<char*>(diffihellman_info))[i]);
+    if(i != size-1)
+      cout << ":";
+  }
+  cout << endl;
+  */
 }
 
 void Client::disconnect()
@@ -60,15 +73,16 @@ void Client::send_message( string message )
   send_raw_message(reinterpret_cast<void*>(buffer), static_cast<u_int16_t>(message.length()));
 }
 
-void Client::send_raw_message( void* data, u_int16_t length )
+void Client::send_raw_message( void* data, u_int16_t data_length, message_type type )
 {
-
-  char* buffer = new char[length + sizeof(u_int16_t)];
-
-  memcpy(buffer, &length, sizeof(u_int16_t));
-  memcpy(&(buffer[sizeof(u_int16_t)]), data, length);
+  u_int16_t message_length;
+  message_length = sizeof(message_type) + data_length;
+  char* buffer = new char[message_length + sizeof(u_int16_t)];
+  memcpy(buffer, &message_length, sizeof(u_int16_t));
+  memcpy(&(buffer[sizeof(u_int16_t)]), reinterpret_cast<void*>(&type), sizeof(message_type));
+  memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
   
-  if(write(client_socket, buffer, length+sizeof(u_int16_t)) < 0)
+  if(write(client_socket, buffer, message_length + sizeof(u_int16_t)) < 0)
   {
     cout << "ERROR: can not send message!";
   }

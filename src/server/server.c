@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include "../NetTypes.h"
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -161,6 +162,58 @@ int get_id_by_socket( int socket, connection_state*(*connections_array_p)[], int
   return result;
 }
 
+/*Returns type of the message
+*/
+message_type get_message_type(char* message)
+{
+  message_type result;
+  memcpy((void*)(&result), message, sizeof(message_type));
+  return result;
+}
+
+
+/*Check message for correctness.
+  If message is correct, returns OK(0). ERROR(-1) otherwise.
+*/
+int check_message_type(message_type real_message_type)
+{
+  //TODO states automata HERE
+  return OK;
+}
+
+/*Return a pointer to a payload of the message
+*/
+char* get_data(char* message)
+{
+  return message + sizeof(message_type);
+}
+
+/* Handle retrieved message.
+   Returns OK(0), if message is handled correct. Otherwise returns ERROR(-1)
+ */
+int handle_message(char* message, connection_state* state_p)
+{
+  message_type real_message_type;
+  char* data;
+
+  data = get_data(message);
+
+  printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
+
+  real_message_type = get_message_type(message); 
+
+  if(check_message_type(real_message_type)==ERROR)
+    return ERROR;
+
+  switch(real_message_type)
+  {
+    case DH_TAKE_PRIME:
+    default:
+      return ERROR;
+  }
+  return OK;
+}
+
 /* Process of server work.
    Returns OK(0), if no errers occured during work. Otherwise returns ERROR(-1)
  */
@@ -241,7 +294,6 @@ int run_server( int server_socket )
             connections[connections_number]->socket = new_client_socket;
             connections[connections_number]->message_size_known = UNKNOWN;
             connections[connections_number]->current_state = CONNECTION_ACCEPTED;
-            connections[connections_number]->next_message_type = DH_GIVE_ME_INIT;
             connections_number++;
             FD_SET( new_client_socket, &sockets_to_read );
             if( new_client_socket > max_socket_descriptor )
@@ -293,7 +345,7 @@ int run_server( int server_socket )
             {
               recv( current_descriptor, buffer, current_state_p->message_size, 0 );
               buffer[current_state_p->message_size] = '\0';
-              printf( "DEBUG: Got full new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
+              handle_message(buffer,current_state_p);
               current_state_p->message_size_known= UNKNOWN;
             }
 
