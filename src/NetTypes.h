@@ -9,10 +9,7 @@ typedef int Socket;
 
 typedef enum m_type           
 {
-  DH_TAKE_PRIME,
-  DH_GIVE_ME_INIT,
-  DH_TAKE_INIT,
-  DH_TAKE_MY_BASE,
+  DH_TAKE_BASE,
   UNKNOWN_TYPE
 } message_type;  
 
