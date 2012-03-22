@@ -15,7 +15,6 @@
 *.a
 
 # Vim swap files
-*.swo
-*.swp
+*.sw*
 
 /bin
