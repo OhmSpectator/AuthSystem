@@ -45,21 +45,14 @@ void Client::connect_to_server( const char* server_address, const char* server_p
 
 void Client::secure_connection()
 {
-  diffihellman_info = DH_generate_parameters( PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL );
-
-  send_raw_message(diffihellman_info, static_cast<u_int16_t>(sizeof(*diffihellman_info)), DH_TAKE_PRIME);
-  
-  /*
-  u_int16_t size = static_cast<u_int16_t>(sizeof(*diffihellman_info));
-  cout << "DEBUG: Sending " << size << " bytes...\n";
-  for(int i = 0; i < size; i++)
+  bool dh_params_good = false;
+  while( !dh_params_good )
   {
-    cout << (int)((reinterpret_cast<char*>(diffihellman_info))[i]);
-    if(i != size-1)
-      cout << ":";
+    diffihellman_info = DH_generate_parameters(PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL);
+    int error_code;
+    dh_params_good = (DH_check(diffihellman_info, &error_code)!=0);
   }
-  cout << endl;
-  */
+  send_raw_message(diffihellman_info, static_cast<u_int16_t>(sizeof(*diffihellman_info)), DH_TAKE_BASE);
 }
 
 void Client::disconnect()
