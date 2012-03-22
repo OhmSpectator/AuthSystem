@@ -207,7 +207,7 @@ int handle_message(char* message, connection_state* state_p)
 
   switch(real_message_type)
   {
-    case DH_TAKE_PRIME:
+    case DH_TAKE_BASE:
     default:
       return ERROR;
   }
