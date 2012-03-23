@@ -4,4 +4,8 @@ libssl-dev package
 Compile:
 -lcrypto (agter source code files) option for g++
 
+apt-get install electronic-fence
+make -d no-asm shared
+ln -s /lib/libcrypto.so.0.9.8 /usr/lib/libcrypto.so
+
 Usage:
