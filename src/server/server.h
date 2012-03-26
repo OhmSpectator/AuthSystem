@@ -40,6 +40,10 @@ typedef struct c_state
   /* Diffie-Hellman info for AES key creation*/
   dhm_context* dh_info;
 
+  /*AES key*/
+  unsigned char* aes_key;
+  size_t aes_key_len;
+
 } connection_state;
 
 

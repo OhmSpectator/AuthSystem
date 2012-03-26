@@ -92,8 +92,12 @@ void Client::secure_connection()
   dh_info->G = dh_base->G;
   dhm_make_params(dh_info, 256, buf, &len, ctr_drbg_random, &generator_info);
   send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
-  unsigned char* server_key_data = get_message(); 
-
+  unsigned char* server_key_data = get_message(&len) + sizeof(message_type); 
+  dhm_read_public(dh_info, server_key_data, dh_info->len);
+  dhm_calc_secret(dh_info, buf, &len );
+  aes_key = (unsigned char*)malloc(len);
+  aes_key_len = len;
+  memcpy(aes_key, buf, len);
 }
 
 void Client::disconnect()
@@ -123,7 +127,7 @@ void Client::send_raw_message( void* data, u_int16_t data_length, message_type t
   }
 }
 
-unsigned char* Client::get_message()
+unsigned char* Client::get_message(size_t* len)
 {
   unsigned char buffer[BUFFER_SIZE];
   bool message_received = false;
@@ -135,6 +139,7 @@ unsigned char* Client::get_message()
   bool timeout = false;
   int counter = TIMER_COUNTER;
   unsigned char* result = NULL;
+  *len = 0;
 
   /* Let select() wait for 1.05 sec */
   time_to_wait.tv_sec = 1.0;
@@ -170,11 +175,17 @@ unsigned char* Client::get_message()
       /* Check, do we got enough data? If not - skeep. */
       if(current_message_size >= message_size)
       {
-        cout << "DEBUG: client get answer! Length: " << message_size << endl;
         recv(client_socket, buffer, message_size, 0 );
         result = (unsigned char*)malloc(message_size);
         memcpy(result, buffer, message_size);
         message_received = true;
+        *len = message_size;
+
+        /*cout << "RCV: " << endl;
+        for(int i = 0; i < message_size; i++)
+          cout << result[i];
+        cout << endl;*/
+
       }
 
     }

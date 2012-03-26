@@ -25,7 +25,7 @@
 /* Max number of connections */
 #define MAX_CONNECTIONS_NUM 1024
 
-unsigned char* get_message(Socket src)
+unsigned char* get_message(Socket src, size_t* len)
 {
   unsigned char buffer[BUFFER_SIZE];
   u_int8_t message_size_known; 
@@ -35,6 +35,7 @@ unsigned char* get_message(Socket src)
   u_int16_t message_size;
   int timeout_counter = TIMEOUT_COUNTER;
   unsigned char* result = NULL;
+  *len = 0;
 
   message_size_known = UNKNOWN;
 
@@ -75,6 +76,7 @@ unsigned char* get_message(Socket src)
         recv(src, buffer, message_size, 0 );
         result = (unsigned char*)malloc(message_size);
         memcpy(result, buffer, message_size);
+        *len = message_size;
         break;
       }
 
@@ -102,7 +104,6 @@ int send_raw_message(Socket dst, void* data, u_int16_t data_length, message_type
     printf( "ERROR: can not send message!" );
     return ERROR;
   }
-  printf("DEBUG: Sended to %d\n", dst);
   return OK;
 }
 
@@ -274,7 +275,7 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   unsigned char buf[1000];
   entropy_context entropy_info;
   ctr_drbg_context generator_info;
-  size_t len, key_len; 
+  size_t len; 
 
   entropy_init(&entropy_info);
   //TODO make not NULL
@@ -284,9 +285,13 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   state_p->dh_info = (dhm_context*)malloc(sizeof(dhm_context));
   dhm_read_params(state_p->dh_info, &data, data + len);
 
-  key_len = state_p->dh_info->len;
-  dhm_make_public(state_p->dh_info, 256, buf, key_len, ctr_drbg_random, &generator_info);
-  send_raw_message(state_p->socket,buf,(u_int16_t)key_len,DH_TAKE_PUB_KEY);
+  len = state_p->dh_info->len;
+  dhm_make_public(state_p->dh_info, 256, buf, len, ctr_drbg_random, &generator_info);
+  send_raw_message(state_p->socket,buf,(u_int16_t)len,DH_TAKE_PUB_KEY);  
+  dhm_calc_secret(state_p->dh_info, buf, &len );
+  state_p->aes_key = (unsigned char*)malloc(len);
+  memcpy(state_p->aes_key, buf, len);
+  state_p->aes_key_len = len;
 
   return OK;
 }

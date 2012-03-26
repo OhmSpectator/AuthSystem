@@ -32,10 +32,12 @@ class Client
 
   Socket client_socket;
   dhm_context* dh_info;
+  unsigned char* aes_key;
+  size_t aes_key_len;
 
   bool connection_secured;
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
-  unsigned char* get_message();
+  unsigned char* get_message(size_t*);
   void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   void secure_connection();
   dh_base* generate_dh_base();
