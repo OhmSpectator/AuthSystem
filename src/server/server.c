@@ -8,6 +8,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "../NetTypes.h"
+#include <polarssl/bignum.h>
+#include <polarssl/ctr_drbg.h>
+#include <polarssl/entropy.h>
+#include <polarssl/dhm.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -165,7 +169,7 @@ int get_id_by_socket( int socket, connection_state*(*connections_array_p)[], int
 
 /*Returns type of the message
 */
-message_type get_message_type(char* message)
+message_type get_message_type(unsigned char* message)
 {
   message_type result;
   memcpy((void*)(&result), message, sizeof(message_type));
@@ -175,69 +179,45 @@ message_type get_message_type(char* message)
 
 /*Return a pointer to a payload of the message
 */
-char* get_data(char* message)
+unsigned char* get_data(unsigned char* message)
 {
   return message + sizeof(message_type);
 }
 
 /*Generate DH key and send required infoto client
 */
-int secure_connection(char* data, connection_state* state_p)
+int secure_connection(unsigned char* data, connection_state* state_p)
 {
-  //TODO
-  /*
-  int error_code;
-  printf("DEBUG: securing...\n");
-  state_p->dh_info = (DH*)malloc(sizeof(DH));
-  memcpy((DH*)(state_p->dh_info),data,sizeof(DH));
+  //TODO 
+
+  size_t len = state_p->message_size - (int)sizeof(message_type);
+  state_p->dh_info = (dhm_context*)malloc(sizeof(dhm_context));
+  dhm_read_params( state_p->dh_info, &data, data + len);
   
-  int i;
-  for(i=0; i<sizeof(DH); i++)
-  {
-    printf("%d", (int)(((char*)state_p->dh_info)[i]));
-    if(i!=sizeof(DH)-1)
-    {
-      printf(":");
-    }
-  }
-  printf("\n");
-  printf("sizof(*dh_info) = %d\n", sizeof(*(state_p->dh_info)));
-
-  error_code = 0;
-  DH_check(state_p->dh_info, &error_code);
-  printf("DEBUG: DH check is ok\n");
-
-
-  if(DH_generate_key(state_p->dh_info) != 1)
-  {
-    printf("DEBUG: Error, while generating b or B\n");
-    return ERROR;
-  } 
-  */
   return OK;
 }
 
 /* Handle retrieved message.
    Returns OK(0), if message is handled correct. Otherwise returns ERROR(-1)
 */
-int handle_message(char* message, connection_state* state_p)
+int handle_message(unsigned char* message, connection_state* state_p)
 {
   message_type real_message_type;
-  char* data;
+  unsigned char* data;
 
   data = get_data(message);
 
   printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
   /*int i;
-  for(i=0; i<state_p->message_size-(int)sizeof(message_type); i++)
-  {
+    for(i=0; i<state_p->message_size-(int)sizeof(message_type); i++)
+    {
     printf("%d", (int)data[i]);
     if(i != state_p->message_size-(int)sizeof(message_type)-1)
     {
-      printf(":");
+    printf(":");
     }
-  }
-  printf("\n");*/
+    }
+    printf("\n");*/
 
   real_message_type = get_message_type(message); 
 
@@ -341,7 +321,7 @@ int run_server( int server_socket )
         /* Otherwise - a new information came for one of opened connections. Handle it. */
         else
         {
-          char buffer[ BUFFER_SIZE ];
+          unsigned char buffer[ BUFFER_SIZE ];
           int socket_id;
           /* The connection state */
           connection_state* current_state_p;

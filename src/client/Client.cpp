@@ -5,18 +5,21 @@
 #include <cstring>
 #include <iostream>
 #include <netdb.h>
-#include <openssl/crypto.h>
-#include <openssl/dh.h>
+#include <polarssl/bignum.h>
+#include <polarssl/ctr_drbg.h>
+#include <polarssl/entropy.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#define PRIME_NUM_LENGTH 43
-#define GENERATOR_NUM 5
+//NOTE 1024 is norm =)
+#define DH_P_SIZE 43
+#define GENERATOR "4"
 
 using namespace std;
 
 Client::Client()
 {
+  dh_info = new dhm_context;
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
@@ -43,42 +46,55 @@ void Client::connect_to_server( const char* server_address, const char* server_p
   secure_connection();
 }
 
+dh_base* Client::generate_dh_base()
+{
+  dh_base* result = new dh_base;
+  mpi Q;
+  entropy_context entropy_info;
+  ctr_drbg_context generator_info;
+  
+  mpi_init(&result->G);
+  mpi_init(&result->P);
+  mpi_init(&Q);
+  mpi_read_string(&result->G, 10, GENERATOR);
+  entropy_init(&entropy_info);
+  
+  //TODO make not NULL
+  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
+  mpi_gen_prime(&result->P, DH_P_SIZE, 3, ctr_drbg_random, &generator_info);
+  
+  mpi_sub_int(&Q, &result->P, 1);
+  mpi_div_int(&Q, NULL, &Q, 2);
+  if(mpi_is_prime(&Q, ctr_drbg_random, &generator_info) != 0)
+  {
+    cout << "ERROR: prime generated ";
+    return NULL;
+  }
+  return result;
+}
+
 void Client::secure_connection()
 {
-  /*bool dh_params_good = false;
-  while( !dh_params_good )
-  {
-    diffihellman_info = DH_generate_parameters(PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL);
-    int error_code;
-    dh_params_good = (DH_check(diffihellman_info, &error_code)!=0);
-  }
-  send_raw_message(diffihellman_info, static_cast<u_int16_t>(sizeof(*diffihellman_info)), DH_TAKE_BASE);
-  
-  DH* dh_info;
-  dh_info = (DH*)malloc(sizeof(DH));
-  memcpy((void*)(dh_info),(void*)diffihellman_info,sizeof(DH));
-  int error_code;
-  DH_check(dh_info, &error_code);
-  
-  for(int i=0; i<(int)sizeof(DH); i++)
-  { 
-    printf("%d", (int)(((char*)(dh_info))[i]));
-    if(i != (int)sizeof(DH)-1)
-    { 
-      printf(":");
-    }
-  }
-  printf("\n");
-  
-  if(DH_generate_key(diffihellman_info) != 1)
-  {
-    printf("DEBUG: ok\n");
-  }
-  */
+  unsigned char buf[1000];
+  entropy_context entropy_info;
+  ctr_drbg_context generator_info;
+  size_t len;
+
+  entropy_init(&entropy_info);
+  //TODO make not NULL
+  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
+
+  dh_base* dh_base = generate_dh_base();
+  dh_info->P = dh_base->P;
+  dh_info->G = dh_base->G;
+  dhm_make_params(dh_info, 256, buf, &len, ctr_drbg_random, &generator_info);
+  cout << "DEBUG: sizeof(buf) = " << sizeof(buf) << endl;
+  send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
 }
 
 void Client::disconnect()
 {
+
 }
 
 //TODO make secure! This ver - just for debug!
@@ -96,7 +112,7 @@ void Client::send_raw_message( void* data, u_int16_t data_length, message_type t
   memcpy(buffer, &message_length, sizeof(u_int16_t));
   memcpy(&(buffer[sizeof(u_int16_t)]), reinterpret_cast<void*>(&type), sizeof(message_type));
   memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
-  
+
   if(write(client_socket, buffer, message_length + sizeof(u_int16_t)) < 0)
   {
     cout << "ERROR: can not send message!";

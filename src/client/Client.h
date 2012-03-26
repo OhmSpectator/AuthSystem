@@ -3,10 +3,17 @@
 
 #include "../NetTypes.h"
 
-#include <openssl/dh.h>
+#include <polarssl/bignum.h>
+#include <polarssl/dhm.h>
 #include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
+
+typedef struct dh_b
+{
+  mpi G;
+  mpi P;
+} dh_base;
 
 using namespace std;
 
@@ -24,13 +31,14 @@ class Client
   private:
 
   Socket client_socket;
-  DH* diffihellman_info; 
+  dhm_context* dh_info;
 
   bool connection_secured;
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
   string retrieve_message();
   void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   void secure_connection();
+  dh_base* generate_dh_base();
 };
 
 #endif
