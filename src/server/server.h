@@ -1,5 +1,6 @@
 /* Structure to describe server state in interacton with a particular client*/
 
+#include <openssl/dh.h>
 #include "../NetTypes.h"
 
 #define KNOWN 1
@@ -35,6 +36,9 @@ typedef struct c_state
 
   /* Message buffer */
   char message_buffer[BUFFER_SIZE];
+
+  /* Diffie-Hellman info for AES key creation*/
+  DH* dh_info;
 
 } connection_state;
 

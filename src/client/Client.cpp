@@ -45,7 +45,7 @@ void Client::connect_to_server( const char* server_address, const char* server_p
 
 void Client::secure_connection()
 {
-  bool dh_params_good = false;
+  /*bool dh_params_good = false;
   while( !dh_params_good )
   {
     diffihellman_info = DH_generate_parameters(PRIME_NUM_LENGTH, GENERATOR_NUM, NULL, NULL);
@@ -53,6 +53,28 @@ void Client::secure_connection()
     dh_params_good = (DH_check(diffihellman_info, &error_code)!=0);
   }
   send_raw_message(diffihellman_info, static_cast<u_int16_t>(sizeof(*diffihellman_info)), DH_TAKE_BASE);
+  
+  DH* dh_info;
+  dh_info = (DH*)malloc(sizeof(DH));
+  memcpy((void*)(dh_info),(void*)diffihellman_info,sizeof(DH));
+  int error_code;
+  DH_check(dh_info, &error_code);
+  
+  for(int i=0; i<(int)sizeof(DH); i++)
+  { 
+    printf("%d", (int)(((char*)(dh_info))[i]));
+    if(i != (int)sizeof(DH)-1)
+    { 
+      printf(":");
+    }
+  }
+  printf("\n");
+  
+  if(DH_generate_key(diffihellman_info) != 1)
+  {
+    printf("DEBUG: ok\n");
+  }
+  */
 }
 
 void Client::disconnect()

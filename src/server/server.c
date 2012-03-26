@@ -29,13 +29,14 @@
 int create_socket(  )
 {
   int result;
-
-  result = ERROR;
+  int protocol_sys_number;
 
   /* get system info about TCP protocol */
   struct protoent* protocol_info = getprotobyname( "TCP" );
-  int protocol_sys_number = protocol_info->p_proto;
+  protocol_sys_number = protocol_info->p_proto;
 
+  result = ERROR;
+  
   /* Socket creation. 
      PF_INET - make working via IPv4 
      SOCK_STREAM - make working via TCP/IP
@@ -172,15 +173,6 @@ message_type get_message_type(char* message)
 }
 
 
-/*Check message for correctness.
-  If message is correct, returns OK(0). ERROR(-1) otherwise.
-*/
-int check_message_type(message_type real_message_type)
-{
-  //TODO states automata HERE
-  return OK;
-}
-
 /*Return a pointer to a payload of the message
 */
 char* get_data(char* message)
@@ -188,9 +180,46 @@ char* get_data(char* message)
   return message + sizeof(message_type);
 }
 
+/*Generate DH key and send required infoto client
+*/
+int secure_connection(char* data, connection_state* state_p)
+{
+  //TODO
+  /*
+  int error_code;
+  printf("DEBUG: securing...\n");
+  state_p->dh_info = (DH*)malloc(sizeof(DH));
+  memcpy((DH*)(state_p->dh_info),data,sizeof(DH));
+  
+  int i;
+  for(i=0; i<sizeof(DH); i++)
+  {
+    printf("%d", (int)(((char*)state_p->dh_info)[i]));
+    if(i!=sizeof(DH)-1)
+    {
+      printf(":");
+    }
+  }
+  printf("\n");
+  printf("sizof(*dh_info) = %d\n", sizeof(*(state_p->dh_info)));
+
+  error_code = 0;
+  DH_check(state_p->dh_info, &error_code);
+  printf("DEBUG: DH check is ok\n");
+
+
+  if(DH_generate_key(state_p->dh_info) != 1)
+  {
+    printf("DEBUG: Error, while generating b or B\n");
+    return ERROR;
+  } 
+  */
+  return OK;
+}
+
 /* Handle retrieved message.
    Returns OK(0), if message is handled correct. Otherwise returns ERROR(-1)
- */
+*/
 int handle_message(char* message, connection_state* state_p)
 {
   message_type real_message_type;
@@ -199,15 +228,24 @@ int handle_message(char* message, connection_state* state_p)
   data = get_data(message);
 
   printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
+  /*int i;
+  for(i=0; i<state_p->message_size-(int)sizeof(message_type); i++)
+  {
+    printf("%d", (int)data[i]);
+    if(i != state_p->message_size-(int)sizeof(message_type)-1)
+    {
+      printf(":");
+    }
+  }
+  printf("\n");*/
 
   real_message_type = get_message_type(message); 
-
-  if(check_message_type(real_message_type)==ERROR)
-    return ERROR;
 
   switch(real_message_type)
   {
     case DH_TAKE_BASE:
+      if(state_p->current_state == CONNECTION_ACCEPTED)
+        secure_connection(data, state_p);
     default:
       return ERROR;
   }
