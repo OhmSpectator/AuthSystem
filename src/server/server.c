@@ -14,6 +14,7 @@
 #include <polarssl/dhm.h>
 #include <string.h>
 #include <errno.h>
+#include <string.h>
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -21,15 +22,95 @@
 #define OK 0
 #define ERROR -1
 
-/* Number of bytes to describe message length */
-#define MESSAGE_SIZE_LENGTH 2
-
 /* Max number of connections */
 #define MAX_CONNECTIONS_NUM 1024
 
+unsigned char* get_message(Socket src)
+{
+  unsigned char buffer[BUFFER_SIZE];
+  u_int8_t message_size_known; 
+  fd_set socket_to_read;
+  Socket max_socket_to_check = src + 1;
+  struct timeval time_to_wait;
+  u_int16_t message_size;
+  int timeout_counter = TIMEOUT_COUNTER;
+  unsigned char* result = NULL;
+
+  message_size_known = UNKNOWN;
+
+  /* Let select() wait for 1.05 sec */
+  time_to_wait.tv_sec = 1.0;
+  time_to_wait.tv_usec = 50;
+
+  FD_SET(src, &socket_to_read);
+
+  while( timeout_counter != 0 )
+  {
+    fd_set sockets_ready_to_read;
+    sockets_ready_to_read = socket_to_read;
+    select(max_socket_to_check, &sockets_ready_to_read, NULL,  NULL, &time_to_wait);
+
+    if(FD_ISSET(src, &sockets_ready_to_read) != 0)
+    {
+      /* Real size of messgae that we can read now*/
+      int current_message_size = recv(src, buffer, BUFFER_SIZE, MSG_PEEK);
+
+      /* If we dont have enough data to get next message size - try to get it */
+      if(message_size_known == UNKNOWN)
+      {
+        /* Learn, if there is enough new data to get size. If not enough - skeep. */
+        if( current_message_size >= MESSAGE_SIZE_LENGTH )
+        {
+          message_size_known = KNOWN;
+          recv(src, buffer, MESSAGE_SIZE_LENGTH, 0);
+          message_size = *((u_int16_t*)buffer);
+          current_message_size -= MESSAGE_SIZE_LENGTH;
+        }
+        else continue;
+      };
+
+      /* Check, do we got enough data? If not - skeep. */
+      if(current_message_size >= message_size)
+      {
+        recv(src, buffer, message_size, 0 );
+        result = (unsigned char*)malloc(message_size);
+        memcpy(result, buffer, message_size);
+        break;
+      }
+
+    }
+    timeout_counter--;
+  }
+  return result;
+}
+
+
+/* Sends a chunk of data of size length and mark it as type.
+   Returns ERROR in case of an error, OK otherwise. =) 
+ */
+int send_raw_message(Socket dst, void* data, u_int16_t data_length, message_type type)
+{
+  u_int16_t message_length;
+  message_length = sizeof(message_type) + data_length;
+  char buffer[message_length + sizeof(u_int16_t)];
+  memcpy(buffer, &message_length, sizeof(u_int16_t));
+  memcpy(&(buffer[sizeof(u_int16_t)]), (void*)(&type), sizeof(message_type));
+  memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
+
+  if(write(dst, buffer, message_length + sizeof(u_int16_t)) < 0)
+  {
+    printf( "ERROR: can not send message!" );
+    return ERROR;
+  }
+  printf("DEBUG: Sended to %d\n", dst);
+  return OK;
+}
+
+
+
 /* Creates new socket. 
    Returns the socket descriptor. In case of an error returns ERROR (-1)
-*/
+ */
 int create_socket(  )
 {
   int result;
@@ -40,7 +121,7 @@ int create_socket(  )
   protocol_sys_number = protocol_info->p_proto;
 
   result = ERROR;
-  
+
   /* Socket creation. 
      PF_INET - make working via IPv4 
      SOCK_STREAM - make working via TCP/IP
@@ -168,7 +249,7 @@ int get_id_by_socket( int socket, connection_state*(*connections_array_p)[], int
 }
 
 /*Returns type of the message
-*/
+ */
 message_type get_message_type(unsigned char* message)
 {
   message_type result;
@@ -178,28 +259,41 @@ message_type get_message_type(unsigned char* message)
 
 
 /*Return a pointer to a payload of the message
-*/
+ */
 unsigned char* get_data(unsigned char* message)
 {
   return message + sizeof(message_type);
 }
 
-/*Generate DH key and send required infoto client
-*/
+/*Generate DH key and send required info to client
+ */
 int secure_connection(unsigned char* data, connection_state* state_p)
 {
   //TODO 
 
-  size_t len = state_p->message_size - (int)sizeof(message_type);
+  unsigned char buf[1000];
+  entropy_context entropy_info;
+  ctr_drbg_context generator_info;
+  size_t len, key_len; 
+
+  entropy_init(&entropy_info);
+  //TODO make not NULL
+  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
+
+  len = state_p->message_size - (int)sizeof(message_type);
   state_p->dh_info = (dhm_context*)malloc(sizeof(dhm_context));
-  dhm_read_params( state_p->dh_info, &data, data + len);
-  
+  dhm_read_params(state_p->dh_info, &data, data + len);
+
+  key_len = state_p->dh_info->len;
+  dhm_make_public(state_p->dh_info, 256, buf, key_len, ctr_drbg_random, &generator_info);
+  send_raw_message(state_p->socket,buf,(u_int16_t)key_len,DH_TAKE_PUB_KEY);
+
   return OK;
 }
 
 /* Handle retrieved message.
    Returns OK(0), if message is handled correct. Otherwise returns ERROR(-1)
-*/
+ */
 int handle_message(unsigned char* message, connection_state* state_p)
 {
   message_type real_message_type;
@@ -207,6 +301,7 @@ int handle_message(unsigned char* message, connection_state* state_p)
 
   data = get_data(message);
 
+  message[state_p->message_size] = '\0';
   printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
   /*int i;
     for(i=0; i<state_p->message_size-(int)sizeof(message_type); i++)
@@ -321,7 +416,7 @@ int run_server( int server_socket )
         /* Otherwise - a new information came for one of opened connections. Handle it. */
         else
         {
-          unsigned char buffer[ BUFFER_SIZE ];
+          unsigned char buffer[BUFFER_SIZE];
           int socket_id;
           /* The connection state */
           connection_state* current_state_p;
@@ -349,7 +444,6 @@ int run_server( int server_socket )
             {
               current_state_p->message_size_known = KNOWN;
               recv( current_descriptor, buffer, MESSAGE_SIZE_LENGTH, 0 );
-              buffer[ MESSAGE_SIZE_LENGTH ] = '\0';
               current_state_p->message_size = *(( u_int16_t* )buffer);
               current_message_size -= MESSAGE_SIZE_LENGTH;
 
@@ -362,18 +456,18 @@ int run_server( int server_socket )
             if( current_message_size >= current_state_p->message_size )
             {
               recv( current_descriptor, buffer, current_state_p->message_size, 0 );
-              buffer[current_state_p->message_size] = '\0';
               handle_message(buffer,current_state_p);
               current_state_p->message_size_known= UNKNOWN;
             }
-
-            else
-            {
-              recv( current_descriptor, buffer, current_message_size, 0 );
-              buffer[current_message_size] = '\0';
-              printf( "DEBUG: Got new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
-              current_state_p->message_size_known= UNKNOWN;
-            }
+            /*
+               else
+               {
+               recv( current_descriptor, buffer, current_message_size, 0 );
+               buffer[current_message_size] = '\0';
+               printf( "DEBUG: Got new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
+               current_state_p->message_size_known= UNKNOWN;
+               }
+             */
           }
 
         }

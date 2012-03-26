@@ -12,8 +12,11 @@
 #include <sys/types.h>
 
 //NOTE 1024 is norm =)
-#define DH_P_SIZE 43
+#define DH_P_SIZE 512
 #define GENERATOR "4"
+#define BUFFER_SIZE 1000
+#define TIMER_COUNTER 10
+
 
 using namespace std;
 
@@ -75,7 +78,7 @@ dh_base* Client::generate_dh_base()
 
 void Client::secure_connection()
 {
-  unsigned char buf[1000];
+  unsigned char buf[BUFFER_SIZE];
   entropy_context entropy_info;
   ctr_drbg_context generator_info;
   size_t len;
@@ -88,8 +91,9 @@ void Client::secure_connection()
   dh_info->P = dh_base->P;
   dh_info->G = dh_base->G;
   dhm_make_params(dh_info, 256, buf, &len, ctr_drbg_random, &generator_info);
-  cout << "DEBUG: sizeof(buf) = " << sizeof(buf) << endl;
   send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
+  unsigned char* server_key_data = get_message(); 
+
 }
 
 void Client::disconnect()
@@ -119,8 +123,68 @@ void Client::send_raw_message( void* data, u_int16_t data_length, message_type t
   }
 }
 
-string Client::retrieve_message()
+unsigned char* Client::get_message()
 {
+  unsigned char buffer[BUFFER_SIZE];
+  bool message_received = false;
+  bool message_size_known = false;
+  fd_set socket_to_read;
+  Socket max_socket_to_check = client_socket + 1;
+  struct timeval time_to_wait;
+  u_int16_t message_size;
+  bool timeout = false;
+  int counter = TIMER_COUNTER;
+  unsigned char* result = NULL;
+
+  /* Let select() wait for 1.05 sec */
+  time_to_wait.tv_sec = 1.0;
+  time_to_wait.tv_usec = 50;
+
+  FD_SET(client_socket, &socket_to_read);
+
+  while(!message_received && !timeout)
+  {
+    fd_set sockets_ready_to_read;
+    sockets_ready_to_read = socket_to_read;
+    select(max_socket_to_check, &sockets_ready_to_read, NULL,  NULL, &time_to_wait);
+  
+    if(FD_ISSET(client_socket, &sockets_ready_to_read) != 0)
+    {
+      /* Real size of messgae that we can read now*/
+      int current_message_size = recv(client_socket, buffer, BUFFER_SIZE, MSG_PEEK);
+
+      /* If we dont have enough data to get next message size - try to get it */
+      if(!message_size_known)
+      {   
+        /* Learn, if there is enough new data to get size. If not enough - skeep. */
+        if( current_message_size >= MESSAGE_SIZE_LENGTH )
+        { 
+          message_size_known = true;
+          recv(client_socket, buffer, MESSAGE_SIZE_LENGTH, 0);
+          message_size = *((u_int16_t*)buffer);
+          current_message_size -= MESSAGE_SIZE_LENGTH;
+        }  
+        else continue; 
+      };  
+
+      /* Check, do we got enough data? If not - skeep. */
+      if(current_message_size >= message_size)
+      {
+        cout << "DEBUG: client get answer! Length: " << message_size << endl;
+        recv(client_socket, buffer, message_size, 0 );
+        result = (unsigned char*)malloc(message_size);
+        memcpy(result, buffer, message_size);
+        message_received = true;
+      }
+
+    }
+    if( counter-- == 0 )
+    {
+      cout << "TIMEOUT!\n";
+      timeout = true;
+    }
+  }
+  return result;
 }
 
 struct addrinfo* Client::get_addrinfo( const char* addr, const char* port )

@@ -35,7 +35,7 @@ class Client
 
   bool connection_secured;
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
-  string retrieve_message();
+  unsigned char* get_message();
   void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   void secure_connection();
   dh_base* generate_dh_base();
