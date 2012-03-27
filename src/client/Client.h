@@ -26,7 +26,7 @@ class Client
   
   void connect_to_server( const char* server_adress, const char* server_port );
   void disconnect();
-  void send_message( string message );
+  void send_message(unsigned char* message, u_int16_t length, message_type type = UNKNOWN_TYPE);
 
   private:
 
@@ -37,9 +37,10 @@ class Client
   bool connection_secured;
   message_type get_message_type(unsigned char* msg);
   unsigned char* get_data(unsigned char* msg);
+  unsigned char* encrypt_message(unsigned char* msg, u_int16_t size);
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
   unsigned char* get_message(size_t*);
-  void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );
+  void send_raw_message( unsigned char* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   void secure_connection();
   dh_base* generate_dh_base();
 };

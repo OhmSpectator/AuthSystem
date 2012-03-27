@@ -14,6 +14,6 @@ int main()
   const char* server_port = console.get_server_port();
   client.connect_to_server( server_address, server_port );
   string message = console.ask_for_message();
-  client.send_message( message );
+  client.send_message((unsigned char*)(message.c_str()), message.length());
   return 0;
 }

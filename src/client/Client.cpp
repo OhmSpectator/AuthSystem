@@ -119,19 +119,24 @@ void Client::disconnect()
 }
 
 //TODO make secure! This ver - just for debug!
-void Client::send_message( string message )
+void Client::send_message(unsigned char* message, u_int16_t length, message_type type)
 {
-  char* buffer = const_cast<char*>(message.c_str());
-  send_raw_message(reinterpret_cast<void*>(buffer), static_cast<u_int16_t>(message.length()));
+  send_raw_message(message, length, type);
 }
 
-void Client::send_raw_message( void* data, u_int16_t data_length, message_type type )
+unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t size)
+{
+  unsigned char* result = NULL;
+  return result;
+}
+
+void Client::send_raw_message(unsigned char* data, u_int16_t data_length, message_type type)
 {
   u_int16_t message_length;
   message_length = sizeof(message_type) + data_length;
-  char* buffer = new char[message_length + sizeof(u_int16_t)];
+  unsigned char* buffer = new unsigned char[message_length + sizeof(u_int16_t)];
   memcpy(buffer, &message_length, sizeof(u_int16_t));
-  memcpy(&(buffer[sizeof(u_int16_t)]), reinterpret_cast<void*>(&type), sizeof(message_type));
+  memcpy(&(buffer[sizeof(u_int16_t)]), reinterpret_cast<unsigned char*>(&type), sizeof(message_type));
   memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
 
   if(write(client_socket, buffer, message_length + sizeof(u_int16_t)) < 0)
