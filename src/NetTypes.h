@@ -10,6 +10,12 @@ typedef struct in_addr Address;
 typedef u_int16_t PortNum;
 typedef int Socket;
 
+typedef struct data
+{
+  unsigned char* data;
+  size_t len;
+} Data;
+
 typedef enum m_type           
 {
   DH_TAKE_BASE,

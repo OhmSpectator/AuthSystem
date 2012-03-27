@@ -32,8 +32,7 @@ class Client
 
   Socket client_socket;
   dhm_context* dh_info;
-  unsigned char* aes_key;
-  size_t aes_key_len;
+  Data aes_key;
 
   bool connection_secured;
   struct addrinfo* get_addrinfo( const char* addr, const char* port );

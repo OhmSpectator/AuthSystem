@@ -26,12 +26,6 @@ Client::Client()
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
- 
-  //char* buffer;
-  //buffer = BN_bn2dec( diffihellman_info->p );
-  //cout << "p = " << buffer << "\n";
-  //OPENSSL_free( buffer );
-  
 }
 
 Client::~Client()
@@ -64,7 +58,7 @@ dh_base* Client::generate_dh_base()
   
   //TODO make not NULL
   ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
-  mpi_gen_prime(&result->P, DH_P_SIZE, 3, ctr_drbg_random, &generator_info);
+  mpi_gen_prime(&result->P, DH_P_SIZE, 1, ctr_drbg_random, &generator_info);
   
   mpi_sub_int(&Q, &result->P, 1);
   mpi_div_int(&Q, NULL, &Q, 2);
@@ -94,10 +88,10 @@ void Client::secure_connection()
   send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
   unsigned char* server_key_data = get_message(&len) + sizeof(message_type); 
   dhm_read_public(dh_info, server_key_data, dh_info->len);
-  dhm_calc_secret(dh_info, buf, &len );
-  aes_key = (unsigned char*)malloc(len);
-  aes_key_len = len;
-  memcpy(aes_key, buf, len);
+  dhm_calc_secret(dh_info, buf, &len);
+  aes_key.data = (unsigned char*)malloc(len);
+  memcpy(aes_key.data,buf,len);
+  aes_key.len = len;  
 }
 
 void Client::disconnect()

@@ -289,10 +289,10 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   dhm_make_public(state_p->dh_info, 256, buf, len, ctr_drbg_random, &generator_info);
   send_raw_message(state_p->socket,buf,(u_int16_t)len,DH_TAKE_PUB_KEY);  
   dhm_calc_secret(state_p->dh_info, buf, &len );
-  state_p->aes_key = (unsigned char*)malloc(len);
-  memcpy(state_p->aes_key, buf, len);
-  state_p->aes_key_len = len;
-
+  state_p->aes_key.data = (unsigned char*)malloc(len);
+  memcpy(state_p->aes_key.data, buf, len);
+  state_p->aes_key.len = len;
+  
   return OK;
 }
 

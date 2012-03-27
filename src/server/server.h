@@ -41,8 +41,7 @@ typedef struct c_state
   dhm_context* dh_info;
 
   /*AES key*/
-  unsigned char* aes_key;
-  size_t aes_key_len;
+  Data aes_key;
 
 } connection_state;
 
