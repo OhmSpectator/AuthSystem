@@ -20,6 +20,7 @@ typedef enum m_type
 {
   DH_TAKE_BASE,
   DH_TAKE_PUB_KEY,
+  TEXT,
   UNKNOWN_TYPE
 } message_type;  
 

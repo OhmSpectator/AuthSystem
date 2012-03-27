@@ -124,6 +124,30 @@ unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, conn
   return result;
 }
 
+unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, connection_state* state_p, u_int16_t* new_length)
+{
+  unsigned char* result = NULL;
+  unsigned char* buffer = NULL;
+  unsigned char IV[16];
+
+  buffer = (unsigned char*)malloc(data_size - sizeof(IV));
+  memcpy(IV, message, sizeof(IV));
+
+  aes_setkey_dec(state_p->aes_info, state_p->aes_key.data, state_p->aes_key.len<<3);
+  aes_crypt_cbc(state_p->aes_info, AES_DECRYPT, data_size - sizeof(IV), IV, message + sizeof(IV), buffer);
+
+  u_int16_t extra_length = 0;
+  memcpy((unsigned char*)(&extra_length), buffer, sizeof(u_int16_t));
+
+  *new_length = data_size - sizeof(IV) - sizeof(u_int16_t) - extra_length;
+
+  result = (unsigned char*)malloc(*new_length);
+  memcpy(result, buffer + sizeof(u_int16_t), *new_length);
+
+  free(buffer);
+  return result;
+}
+
 
 
 /* Sends a chunk of data of size length and mark it as type.
@@ -347,24 +371,17 @@ int handle_message(unsigned char* message, connection_state* state_p)
 
   message[state_p->message_size] = '\0';
   printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
-  /*int i;
-    for(i=0; i<state_p->message_size-(int)sizeof(message_type); i++)
-    {
-    printf("%d", (int)data[i]);
-    if(i != state_p->message_size-(int)sizeof(message_type)-1)
-    {
-    printf(":");
-    }
-    }
-    printf("\n");*/
 
   real_message_type = get_message_type(message); 
+
+  u_int16_t len;
 
   switch(real_message_type)
   {
     case DH_TAKE_BASE:
       if(state_p->current_state == CONNECTION_ACCEPTED)
         secure_connection(data, state_p);
+      break;
     default:
       return ERROR;
   }

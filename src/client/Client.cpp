@@ -154,33 +154,31 @@ unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t data_si
   return result;
 }
 
-/*
+
 unsigned char* Client::decrypt_message(unsigned char* message, u_int16_t data_size, u_int16_t* new_length)
 {
   unsigned char* result = NULL;
+  unsigned char* buffer = NULL;
   unsigned char IV[16];
 
-  memcpy(IV,
+  buffer = (unsigned char*)malloc(data_size - sizeof(IV));
+  memcpy(IV, message, sizeof(IV));
 
   aes_setkey_dec(aes_info, aes_key.data, aes_key.len<<3);
+  aes_crypt_cbc(aes_info, AES_DECRYPT, data_size - sizeof(IV), IV, message + sizeof(IV), buffer);
 
   u_int16_t extra_length = 0;
-  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
-  u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
-  if( bad_data_length != 0 )
-    extra_length = (u_int16_t)16 - bad_data_length;
+  memcpy((unsigned char*)(&extra_length), buffer, sizeof(u_int16_t));
 
-  result = (unsigned char*)malloc(sizeof(u_int16_t) + data_size + extra_length);
-  memcpy(result, (unsigned char*)(&extra_length), sizeof(u_int16_t));
-  memcpy(result + sizeof(u_int16_t), message, data_size);
-  if(extra_length != 0)
-    memset(result + sizeof(u_int16_t) + data_size, 0, extra_length );
-  aes_crypt_cbc(aes_info, AES_ENCRYPT, sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
-  *new_length = sizeof(u_int16_t) + data_size + extra_length;
+  *new_length = data_size - sizeof(IV) - sizeof(u_int16_t) - extra_length;
 
+  result = (unsigned char*)malloc(*new_length);
+  memcpy(result, buffer + sizeof(u_int16_t), *new_length);
+  
+  free(buffer);
   return result;
 }
-*/
+
 
 void Client::send_raw_message(unsigned char* data, u_int16_t data_length, message_type type)
 {
@@ -190,7 +188,6 @@ void Client::send_raw_message(unsigned char* data, u_int16_t data_length, messag
   memcpy(buffer, &message_length, sizeof(u_int16_t));
   memcpy(&(buffer[sizeof(u_int16_t)]), reinterpret_cast<unsigned char*>(&type), sizeof(message_type));
   memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
-
   if(write(client_socket, buffer, message_length + sizeof(u_int16_t)) < 0)
   {
     cout << "ERROR: can not send message!";
@@ -202,7 +199,6 @@ void Client::send_message(unsigned char* message, u_int16_t length, message_type
 {
   u_int16_t new_length;
   unsigned char* encrypted_message = encrypt_message(message, length, &new_length);
-  send_raw_message(message, length, type);
   send_raw_message(encrypted_message, new_length, type);
   free( encrypted_message);
 }
