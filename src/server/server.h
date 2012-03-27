@@ -12,8 +12,7 @@
 typedef enum s_id
 {
   CONNECTION_ACCEPTED,
-  INIT_SEND,
-  AES_KEY_CREATED	
+  CONNECTION_SECURED
 } state_id;
 
 typedef struct c_state

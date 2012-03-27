@@ -13,7 +13,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-//NOTE 1024 is norm =)
 #define DH_P_SIZE 128 
 #define GENERATOR "4"
 #define BUFFER_SIZE 1000
@@ -26,6 +25,10 @@ Client::Client()
 {
   dh_info = new dhm_context;
   aes_info = new aes_context;
+  entropy_context entropy_info;
+  entropy_init(&entropy_info);
+  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, (unsigned char*)"STRING", 6);
+  ctr_drbg_set_prediction_resistance(&generator_info, CTR_DRBG_PR_OFF);
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
@@ -42,9 +45,13 @@ void Client::connect_to_server( const char* server_address, const char* server_p
   if( connect( client_socket, address_p->ai_addr, address_p->ai_addrlen ) != 0 ) 
   {
     cout << "ERROR: can not connect!\n";
-    exit( -1 );
+    exit(-1);
   }
-  secure_connection();
+  if( !secure_connection() )
+  {
+    cout << "ERROR: cannot secure connection!";
+    exit(-1);
+  }
 }
 
 /*Returns type of the message
@@ -68,17 +75,12 @@ dh_base* Client::generate_dh_base()
 {
   dh_base* result = new dh_base;
   mpi Q;
-  entropy_context entropy_info;
-  ctr_drbg_context generator_info;
 
   mpi_init(&result->G);
   mpi_init(&result->P);
   mpi_init(&Q);
   mpi_read_string(&result->G, 10, GENERATOR);
-  entropy_init(&entropy_info);
 
-  //TODO make not NULL
-  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
   mpi_gen_prime(&result->P, DH_P_SIZE, 1, ctr_drbg_random, &generator_info);
 
   mpi_sub_int(&Q, &result->P, 1);
@@ -91,16 +93,10 @@ dh_base* Client::generate_dh_base()
   return result;
 }
 
-void Client::secure_connection()
+bool Client::secure_connection()
 {
   unsigned char buf[BUFFER_SIZE];
-  entropy_context entropy_info;
-  ctr_drbg_context generator_info;
   size_t len;
-
-  entropy_init(&entropy_info);
-  //TODO make not NULL
-  ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
 
   dh_base* dh_base = generate_dh_base();
   dh_info->P = dh_base->P;
@@ -109,13 +105,17 @@ void Client::secure_connection()
   send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
   unsigned char* server_answer = get_message(&len);
   if( get_message_type(server_answer) != DH_TAKE_PUB_KEY )
+  {
     cout << "ERROR: Answer corrupted\n";
+    return false;
+  }
   dhm_read_public(dh_info, get_data(server_answer), dh_info->len);
   free(server_answer);
   dhm_calc_secret(dh_info, buf, &len);
   aes_key.data = (unsigned char*)malloc(len);
   memcpy(aes_key.data,buf,len);
   aes_key.len = len;
+  return true;
 }
 
 void Client::disconnect()
@@ -126,28 +126,26 @@ void Client::disconnect()
 unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t data_size, u_int16_t* new_length)
 {
   unsigned char* result = NULL;
-  havege_state rand_info;
   unsigned char IV[16];
   
-
-  //TODO test, if it different each time
-  havege_init(&rand_info);
-  havege_random(&rand_info, IV, 16);
-  
+  ctr_drbg_random(&generator_info, IV, 16);
   aes_setkey_enc(aes_info, aes_key.data, aes_key.len<<3);
-  
+
   u_int16_t extra_length = 0;
   u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t) + sizeof(IV);
   u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
   if( bad_data_length != 0 )
     extra_length = (u_int16_t)16 - bad_data_length;
-  
+
   result = (unsigned char*)malloc(sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length);
   memcpy(result, (unsigned char*)(IV),sizeof(IV));
   memcpy(result + sizeof(IV), (unsigned char*)(&extra_length), sizeof(u_int16_t));
   memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
   if(extra_length != 0)
     memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
+  //TODO strange behaviour. IV looks like no playing a role.
+  for( int i = 0; i < 16; i++ )
+    result[i] ^= IV[i];
   aes_crypt_cbc(aes_info, AES_ENCRYPT, sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
   *new_length = sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length;
 
@@ -174,7 +172,7 @@ unsigned char* Client::decrypt_message(unsigned char* message, u_int16_t data_si
 
   result = (unsigned char*)malloc(*new_length);
   memcpy(result, buffer + sizeof(u_int16_t), *new_length);
-  
+
   free(buffer);
   return result;
 }
@@ -194,13 +192,12 @@ void Client::send_raw_message(unsigned char* data, u_int16_t data_length, messag
   }
 }
 
-//TODO make secure! This ver - just for debug!
-void Client::send_message(unsigned char* message, u_int16_t length, message_type type)
+void Client::send_message(unsigned char* message, u_int16_t length)
 {
   u_int16_t new_length;
   unsigned char* encrypted_message = encrypt_message(message, length, &new_length);
-  send_raw_message(encrypted_message, new_length, type);
-  free( encrypted_message);
+  send_raw_message(encrypted_message, new_length, SECURED);
+  free(encrypted_message);
 }
 
 

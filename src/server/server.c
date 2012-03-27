@@ -118,6 +118,9 @@ unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, conn
   memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
   if(extra_length != 0)
     memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
+  int i;
+  for(i = 0; i < 16; i++)
+    result[i] ^= IV[i];
   aes_crypt_cbc(state_p->aes_info, AES_ENCRYPT, sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
   *new_length = sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length;
 
@@ -143,6 +146,9 @@ unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, conn
 
   result = (unsigned char*)malloc(*new_length);
   memcpy(result, buffer + sizeof(u_int16_t), *new_length);
+
+  result[*new_length] = '\0';
+  printf("DECRYPTED: %s\n", result);
 
   free(buffer);
   return result;
@@ -333,7 +339,6 @@ unsigned char* get_data(unsigned char* message)
  */
 int secure_connection(unsigned char* data, connection_state* state_p)
 {
-  //TODO 
 
   unsigned char buf[1000];
   entropy_context entropy_info;
@@ -341,7 +346,6 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   size_t len; 
 
   entropy_init(&entropy_info);
-  //TODO make not NULL
   ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
 
   len = state_p->message_size - (int)sizeof(message_type);
@@ -380,8 +384,13 @@ int handle_message(unsigned char* message, connection_state* state_p)
   {
     case DH_TAKE_BASE:
       if(state_p->current_state == CONNECTION_ACCEPTED)
+      {
         secure_connection(data, state_p);
+        state_p->current_state == CONNECTION_SECURED;
+      } 
       break;
+    case SECURED:
+      decrypt_message(data, state_p->message_size-(int)sizeof(message_type),state_p,&len );
     default:
       return ERROR;
   }
@@ -426,7 +435,7 @@ int run_server( int server_socket )
   /* Main loop.
      Waiting for connections and handling.
    */
-  while( 1 )
+  while(1)
   {
     int current_descriptor;
     /* Socket descriptors, ONLY that are READY for I/O */
@@ -520,22 +529,10 @@ int run_server( int server_socket )
               handle_message(buffer,current_state_p);
               current_state_p->message_size_known= UNKNOWN;
             }
-            /*
-               else
-               {
-               recv( current_descriptor, buffer, current_message_size, 0 );
-               buffer[current_message_size] = '\0';
-               printf( "DEBUG: Got new message! (size = %d)\n============\n%s\n============\n", current_message_size,buffer );
-               current_state_p->message_size_known= UNKNOWN;
-               }
-             */
           }
-
         }
       }
-
     }
-
   }
 
   for( i = 0; i < connections_number; i++ )
