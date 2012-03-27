@@ -148,7 +148,7 @@ unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, conn
   memcpy(result, buffer + sizeof(u_int16_t), *new_length);
 
   result[*new_length] = '\0';
-  printf("DECRYPTED: %s\n", result);
+  printf("DECRYPTED: %s\n", result+sizeof(message_type));
 
   free(buffer);
   return result;
@@ -159,13 +159,13 @@ unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, conn
 /* Sends a chunk of data of size length and mark it as type.
    Returns ERROR in case of an error, OK otherwise. =) 
  */
-int send_raw_message(Socket dst, void* data, u_int16_t data_length, message_type type)
+int send_raw_message(Socket dst, unsigned char* data, u_int16_t data_length, message_type type)
 {
   u_int16_t message_length;
   message_length = sizeof(message_type) + data_length;
-  char buffer[message_length + sizeof(u_int16_t)];
+  unsigned char buffer[message_length + sizeof(u_int16_t)];
   memcpy(buffer, &message_length, sizeof(u_int16_t));
-  memcpy(&(buffer[sizeof(u_int16_t)]), (void*)(&type), sizeof(message_type));
+  memcpy(&(buffer[sizeof(u_int16_t)]), (unsigned char*)(&type), sizeof(message_type));
   memcpy(&(buffer[sizeof(u_int16_t)+sizeof(message_type)]), data, data_length);
 
   if(write(dst, buffer, message_length + sizeof(u_int16_t)) < 0)
@@ -176,6 +176,17 @@ int send_raw_message(Socket dst, void* data, u_int16_t data_length, message_type
   return OK;
 }
 
+int send_message(Socket dst, unsigned char* data, u_int16_t length, message_type type, connection_state* state_p)
+{
+  u_int16_t new_length;
+  unsigned char buffer[length + sizeof(message_type)];
+  unsigned char* encrypted_message;
+  memcpy(buffer, (unsigned char*)(&type), sizeof(message_type));
+  memcpy(buffer + sizeof(message_type), data, length);
+  encrypted_message = encrypt_message(buffer, length + sizeof(message_type), state_p, &new_length);
+  send_raw_message(dst, encrypted_message, new_length, SECURED);
+  free(encrypted_message);
+}
 
 
 /* Creates new socket. 

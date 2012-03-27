@@ -192,13 +192,18 @@ void Client::send_raw_message(unsigned char* data, u_int16_t data_length, messag
   }
 }
 
-void Client::send_message(unsigned char* message, u_int16_t length)
+void Client::send_message(unsigned char* message, u_int16_t length, message_type type)
 {
   u_int16_t new_length;
-  unsigned char* encrypted_message = encrypt_message(message, length, &new_length);
+  unsigned char buffer[length + sizeof(message_type)];
+  unsigned char* encrypted_message; 
+  memcpy(buffer, (unsigned char*)(&type), sizeof(message_type));
+  memcpy(buffer + sizeof(message_type), message, length);
+  encrypted_message = encrypt_message(buffer, length + sizeof(message_type),  &new_length);
   send_raw_message(encrypted_message, new_length, SECURED);
   free(encrypted_message);
 }
+
 
 
 unsigned char* Client::get_message(size_t* len)
