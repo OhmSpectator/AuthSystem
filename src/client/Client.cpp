@@ -5,14 +5,16 @@
 #include <cstring>
 #include <iostream>
 #include <netdb.h>
+#include <polarssl/aes.h>
 #include <polarssl/bignum.h>
 #include <polarssl/ctr_drbg.h>
 #include <polarssl/entropy.h>
+#include <polarssl/havege.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
 //NOTE 1024 is norm =)
-#define DH_P_SIZE 512
+#define DH_P_SIZE 128 
 #define GENERATOR "4"
 #define BUFFER_SIZE 1000
 #define TIMER_COUNTER 10
@@ -23,6 +25,7 @@ using namespace std;
 Client::Client()
 {
   dh_info = new dhm_context;
+  aes_info = new aes_context;
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if( client_socket == -1 )
     cout << "ERROR: Failed to create socket\n";
@@ -30,6 +33,7 @@ Client::Client()
 
 Client::~Client()
 {
+  free(aes_key.data);
 }
 
 void Client::connect_to_server( const char* server_address, const char* server_port )
@@ -107,10 +111,11 @@ void Client::secure_connection()
   if( get_message_type(server_answer) != DH_TAKE_PUB_KEY )
     cout << "ERROR: Answer corrupted\n";
   dhm_read_public(dh_info, get_data(server_answer), dh_info->len);
+  free(server_answer);
   dhm_calc_secret(dh_info, buf, &len);
   aes_key.data = (unsigned char*)malloc(len);
   memcpy(aes_key.data,buf,len);
-  aes_key.len = len;  
+  aes_key.len = len;
 }
 
 void Client::disconnect()
@@ -118,15 +123,31 @@ void Client::disconnect()
 
 }
 
-//TODO make secure! This ver - just for debug!
-void Client::send_message(unsigned char* message, u_int16_t length, message_type type)
-{
-  send_raw_message(message, length, type);
-}
-
-unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t size)
+unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t data_size, u_int16_t* new_length)
 {
   unsigned char* result = NULL;
+  havege_state rand_info;
+  unsigned char IV[16];
+  
+  havege_init(&rand_info);
+  havege_random(&rand_info, IV, 16);
+  
+  aes_setkey_enc(aes_info, aes_key.data, aes_key.len<<3);
+  
+  u_int16_t extra_length = 0;
+  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
+  u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
+  if( bad_data_length != 0 )
+    extra_length = (u_int16_t)16 - bad_data_length;
+  
+  result = (unsigned char*)malloc(sizeof(u_int16_t) + data_size + extra_length);
+  memcpy(result, (unsigned char*)(&extra_length), sizeof(u_int16_t));
+  memcpy(result + sizeof(u_int16_t), message, data_size);
+  if(extra_length != 0)
+    memset(result + sizeof(u_int16_t) + data_size, 0, extra_length );
+  aes_crypt_cbc(aes_info, AES_ENCRYPT, sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
+  *new_length = sizeof(u_int16_t) + data_size + extra_length;
+  
   return result;
 }
 
@@ -145,6 +166,17 @@ void Client::send_raw_message(unsigned char* data, u_int16_t data_length, messag
   }
 }
 
+//TODO make secure! This ver - just for debug!
+void Client::send_message(unsigned char* message, u_int16_t length, message_type type)
+{
+  u_int16_t new_length;
+  unsigned char* encrypted_message = encrypt_message(message, length, &new_length);
+  send_raw_message(message, length, type);
+  send_raw_message(encrypted_message, new_length, type);
+  free( encrypted_message);
+}
+
+
 unsigned char* Client::get_message(size_t* len)
 {
   unsigned char buffer[BUFFER_SIZE];
@@ -161,8 +193,8 @@ unsigned char* Client::get_message(size_t* len)
 
   /* Let select() wait for 1.05 sec */
   time_to_wait.tv_sec = 1.0;
-  time_to_wait.tv_usec = 50;
-
+  time_to_wait.tv_usec = 5;
+  
   FD_SET(client_socket, &socket_to_read);
 
   while(!message_received && !timeout)
@@ -226,7 +258,7 @@ struct addrinfo* Client::get_addrinfo( const char* addr, const char* port )
   hints.ai_flags = AI_NUMERICHOST || AI_NUMERICSERV;
   hints.ai_protocol = IPPROTO_TCP;
 
-  if(  getaddrinfo( addr, port, &hints, &result ) != 0 )
+  if(getaddrinfo( addr, port, &hints, &result ) != 0)
   {
     cout << "ERROR: " << " Worng addr or port!\n";
     exit( -1 );

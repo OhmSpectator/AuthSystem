@@ -1,5 +1,6 @@
 /* Structure to describe server state in interacton with a particular client*/
 
+#include <polarssl/aes.h>
 #include <polarssl/dhm.h>
 #include "../NetTypes.h"
 
@@ -42,6 +43,9 @@ typedef struct c_state
 
   /*AES key*/
   Data aes_key;
+
+  /*AES context*/
+  aes_context* aes_info;
 
 } connection_state;
 

@@ -8,10 +8,12 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "../NetTypes.h"
+#include <polarssl/aes.h>
 #include <polarssl/bignum.h>
 #include <polarssl/ctr_drbg.h>
 #include <polarssl/entropy.h>
 #include <polarssl/dhm.h>
+#include <polarssl/havege.h>
 #include <string.h>
 #include <errno.h>
 #include <string.h>
@@ -85,6 +87,42 @@ unsigned char* get_message(Socket src, size_t* len)
   }
   return result;
 }
+
+/*Returns pointer to a crypted message of size data_size. Mem for it allocates inside the func.
+  Len of new block of data returns in new_length. 
+  Adds a len of extra data to the begining and extra data (in case of not multiplying by 16) to the end.
+  After - encrypts with AES.
+  In case of error returns NULL.
+*/
+
+unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, connection_state* state_p,  u_int16_t* new_length)
+{
+  unsigned char* result = NULL;
+  havege_state rand_info;
+  unsigned char IV[16];
+
+  havege_init(&rand_info);
+  havege_random(&rand_info, IV, 16);
+
+  aes_setkey_enc(state_p->aes_info, state_p->aes_key.data, state_p->aes_key.len<<3);
+
+  u_int16_t extra_length = 0;
+  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
+  u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
+  if( bad_data_length != 0 ) 
+    extra_length = (u_int16_t)16 - bad_data_length;
+
+  result = (unsigned char*)malloc(sizeof(u_int16_t) + data_size + extra_length);
+  memcpy(result, (unsigned char*)(&extra_length), sizeof(u_int16_t));
+  memcpy(result + sizeof(u_int16_t), message, data_size);
+  if(extra_length != 0)
+    memset(result + sizeof(u_int16_t) + data_size, 0, extra_length );
+  aes_crypt_cbc(state_p->aes_info, AES_ENCRYPT, sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
+  *new_length = sizeof(u_int16_t) + data_size + extra_length;
+
+  return result;
+}
+
 
 
 /* Sends a chunk of data of size length and mark it as type.
@@ -292,7 +330,7 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   state_p->aes_key.data = (unsigned char*)malloc(len);
   memcpy(state_p->aes_key.data, buf, len);
   state_p->aes_key.len = len;
-  
+  state_p->aes_info = (aes_context*)malloc(sizeof(aes_context));
   return OK;
 }
 
