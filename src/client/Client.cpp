@@ -129,17 +129,47 @@ unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t data_si
   havege_state rand_info;
   unsigned char IV[16];
   
+
+  //TODO test, if it different each time
   havege_init(&rand_info);
   havege_random(&rand_info, IV, 16);
   
   aes_setkey_enc(aes_info, aes_key.data, aes_key.len<<3);
   
   u_int16_t extra_length = 0;
-  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
+  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t) + sizeof(IV);
   u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
   if( bad_data_length != 0 )
     extra_length = (u_int16_t)16 - bad_data_length;
   
+  result = (unsigned char*)malloc(sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length);
+  memcpy(result, (unsigned char*)(IV),sizeof(IV));
+  memcpy(result + sizeof(IV), (unsigned char*)(&extra_length), sizeof(u_int16_t));
+  memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
+  if(extra_length != 0)
+    memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
+  aes_crypt_cbc(aes_info, AES_ENCRYPT, sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
+  *new_length = sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length;
+
+  return result;
+}
+
+/*
+unsigned char* Client::decrypt_message(unsigned char* message, u_int16_t data_size, u_int16_t* new_length)
+{
+  unsigned char* result = NULL;
+  unsigned char IV[16];
+
+  memcpy(IV,
+
+  aes_setkey_dec(aes_info, aes_key.data, aes_key.len<<3);
+
+  u_int16_t extra_length = 0;
+  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
+  u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
+  if( bad_data_length != 0 )
+    extra_length = (u_int16_t)16 - bad_data_length;
+
   result = (unsigned char*)malloc(sizeof(u_int16_t) + data_size + extra_length);
   memcpy(result, (unsigned char*)(&extra_length), sizeof(u_int16_t));
   memcpy(result + sizeof(u_int16_t), message, data_size);
@@ -147,9 +177,10 @@ unsigned char* Client::encrypt_message(unsigned char* message, u_int16_t data_si
     memset(result + sizeof(u_int16_t) + data_size, 0, extra_length );
   aes_crypt_cbc(aes_info, AES_ENCRYPT, sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
   *new_length = sizeof(u_int16_t) + data_size + extra_length;
-  
+
   return result;
 }
+*/
 
 void Client::send_raw_message(unsigned char* data, u_int16_t data_length, message_type type)
 {
@@ -194,7 +225,7 @@ unsigned char* Client::get_message(size_t* len)
   /* Let select() wait for 1.05 sec */
   time_to_wait.tv_sec = 1.0;
   time_to_wait.tv_usec = 5;
-  
+
   FD_SET(client_socket, &socket_to_read);
 
   while(!message_received && !timeout)

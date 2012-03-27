@@ -93,7 +93,7 @@ unsigned char* get_message(Socket src, size_t* len)
   Adds a len of extra data to the begining and extra data (in case of not multiplying by 16) to the end.
   After - encrypts with AES.
   In case of error returns NULL.
-*/
+ */
 
 unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, connection_state* state_p,  u_int16_t* new_length)
 {
@@ -107,18 +107,19 @@ unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, conn
   aes_setkey_enc(state_p->aes_info, state_p->aes_key.data, state_p->aes_key.len<<3);
 
   u_int16_t extra_length = 0;
-  u_int16_t pred_new_msg_length = data_size + (u_int16_t)sizeof(u_int16_t);
+  u_int16_t pred_new_msg_length = sizeof(IV) + data_size + (u_int16_t)sizeof(u_int16_t);
   u_int16_t bad_data_length = (u_int16_t)((pred_new_msg_length) & (u_int16_t)15);
   if( bad_data_length != 0 ) 
     extra_length = (u_int16_t)16 - bad_data_length;
 
-  result = (unsigned char*)malloc(sizeof(u_int16_t) + data_size + extra_length);
-  memcpy(result, (unsigned char*)(&extra_length), sizeof(u_int16_t));
-  memcpy(result + sizeof(u_int16_t), message, data_size);
+  result = (unsigned char*)malloc(sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length);
+  memcpy(result, (unsigned char*)(IV),sizeof(IV));
+  memcpy(result + sizeof(IV), (unsigned char*)(&extra_length), sizeof(u_int16_t));
+  memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
   if(extra_length != 0)
-    memset(result + sizeof(u_int16_t) + data_size, 0, extra_length );
-  aes_crypt_cbc(state_p->aes_info, AES_ENCRYPT, sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
-  *new_length = sizeof(u_int16_t) + data_size + extra_length;
+    memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
+  aes_crypt_cbc(state_p->aes_info, AES_ENCRYPT, sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length, IV, result, result );
+  *new_length = sizeof(IV) + sizeof(u_int16_t) + data_size + extra_length;
 
   return result;
 }
