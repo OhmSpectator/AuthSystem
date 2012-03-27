@@ -35,6 +35,8 @@ class Client
   Data aes_key;
 
   bool connection_secured;
+  message_type get_message_type(unsigned char* msg);
+  unsigned char* get_data(unsigned char* msg);
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
   unsigned char* get_message(size_t*);
   void send_raw_message( void* data, u_int16_t length, message_type=UNKNOWN_TYPE );

@@ -43,23 +43,40 @@ void Client::connect_to_server( const char* server_address, const char* server_p
   secure_connection();
 }
 
+/*Returns type of the message
+ */
+message_type Client::get_message_type(unsigned char* message)
+{
+  message_type result;
+  memcpy((void*)(&result), message, sizeof(message_type));
+  return result;
+}
+
+
+/*Return a pointer to a payload of the message
+ */
+unsigned char* Client::get_data(unsigned char* message)
+{
+  return message + sizeof(message_type);
+}
+
 dh_base* Client::generate_dh_base()
 {
   dh_base* result = new dh_base;
   mpi Q;
   entropy_context entropy_info;
   ctr_drbg_context generator_info;
-  
+
   mpi_init(&result->G);
   mpi_init(&result->P);
   mpi_init(&Q);
   mpi_read_string(&result->G, 10, GENERATOR);
   entropy_init(&entropy_info);
-  
+
   //TODO make not NULL
   ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
   mpi_gen_prime(&result->P, DH_P_SIZE, 1, ctr_drbg_random, &generator_info);
-  
+
   mpi_sub_int(&Q, &result->P, 1);
   mpi_div_int(&Q, NULL, &Q, 2);
   if(mpi_is_prime(&Q, ctr_drbg_random, &generator_info) != 0)
@@ -86,8 +103,10 @@ void Client::secure_connection()
   dh_info->G = dh_base->G;
   dhm_make_params(dh_info, 256, buf, &len, ctr_drbg_random, &generator_info);
   send_raw_message(buf, static_cast<u_int16_t>(len), DH_TAKE_BASE);
-  unsigned char* server_key_data = get_message(&len) + sizeof(message_type); 
-  dhm_read_public(dh_info, server_key_data, dh_info->len);
+  unsigned char* server_answer = get_message(&len);
+  if( get_message_type(server_answer) != DH_TAKE_PUB_KEY )
+    cout << "ERROR: Answer corrupted\n";
+  dhm_read_public(dh_info, get_data(server_answer), dh_info->len);
   dhm_calc_secret(dh_info, buf, &len);
   aes_key.data = (unsigned char*)malloc(len);
   memcpy(aes_key.data,buf,len);
@@ -146,7 +165,7 @@ unsigned char* Client::get_message(size_t* len)
     fd_set sockets_ready_to_read;
     sockets_ready_to_read = socket_to_read;
     select(max_socket_to_check, &sockets_ready_to_read, NULL,  NULL, &time_to_wait);
-  
+
     if(FD_ISSET(client_socket, &sockets_ready_to_read) != 0)
     {
       /* Real size of messgae that we can read now*/
@@ -176,9 +195,9 @@ unsigned char* Client::get_message(size_t* len)
         *len = message_size;
 
         /*cout << "RCV: " << endl;
-        for(int i = 0; i < message_size; i++)
+          for(int i = 0; i < message_size; i++)
           cout << result[i];
-        cout << endl;*/
+          cout << endl;*/
 
       }
 
