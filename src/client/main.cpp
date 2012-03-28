@@ -15,8 +15,8 @@ int main()
   client.connect_to_server( server_address, server_port );
   while(1)
   {
-    string message = console.ask_for_message();
-    client.send_message((unsigned char*)(message.c_str()), message.length());
+    client.login_data = console.ask_for_logpass();
+    client.send_message((unsigned char*)(client.login_data), sizeof(login_password), WANT_LOGIN);
   }
   return 0;
 }

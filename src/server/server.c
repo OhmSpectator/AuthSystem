@@ -14,10 +14,12 @@
 #include <polarssl/entropy.h>
 #include <polarssl/dhm.h>
 #include <polarssl/havege.h>
+#include <polarssl/md5.h>
 #include <string.h>
 #include <errno.h>
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/select.h>
 #include <sys/time.h>
 
@@ -359,7 +361,8 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   entropy_init(&entropy_info);
   ctr_drbg_init(&generator_info, entropy_func, &entropy_info, NULL, 0);
 
-  len = state_p->message_size - (int)sizeof(message_type);
+  //TODO1
+  len = state_p->message_size;
   state_p->dh_info = (dhm_context*)malloc(sizeof(dhm_context));
   dhm_read_params(state_p->dh_info, &data, data + len);
 
@@ -371,7 +374,106 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   memcpy(state_p->aes_key.data, buf, len);
   state_p->aes_key.len = len;
   state_p->aes_info = (aes_context*)malloc(sizeof(aes_context));
+  state_p->login_attempts = 0;
   return OK;
+}
+
+int cmp(unsigned char* a, unsigned char* b, size_t len)
+{
+  int i;
+  for(i = 0; i < len; i++)
+    if(a[i] != b[i])
+      return 1;
+  return 0;
+}
+
+int find_hash_by_login(unsigned char* login, unsigned char** hash)
+{
+  FILE* psswd_file;
+  if((psswd_file = fopen("psswd", "r")) == NULL)
+    return ERROR;
+  while(!feof(psswd_file))
+  {
+    unsigned char* current_login = (unsigned char*)malloc(LOGIN_SIZE);
+    *hash = (unsigned char*)malloc(33);
+    (*hash)[32] = 0;
+    unsigned char buffer[1000];
+    memset(current_login, 0, LOGIN_SIZE);
+    if(fgets(buffer,1000,psswd_file)==NULL)
+    {
+      free(current_login);
+      free(*hash);
+      fclose(psswd_file);
+      return ERROR;
+    }
+    unsigned char* colomn_pos;
+    if((colomn_pos = strstr(buffer,":")) == NULL)
+    {
+      free(current_login);
+      free(*hash);
+      fclose(psswd_file);
+      return ERROR;
+    }
+    strncpy(current_login,buffer,colomn_pos-buffer);
+    strncpy(*hash,colomn_pos+1,32);
+    if(cmp(current_login,login,LOGIN_SIZE) == 0)
+    {
+      free(current_login);
+      fclose(psswd_file);
+      return OK;
+    }
+    free(*hash);
+    free(current_login);
+  }
+  fclose(psswd_file); 
+  return ERROR;
+}
+
+unsigned char* hex_encode(unsigned char* data, size_t length)
+{
+  unsigned char* result;
+  result = (unsigned char*)malloc(length<<1 + 1);
+  int i;
+  for(i=0;i<length;i++)
+    sprintf(result+i*2,"%02x",data[i]);
+  result[length<<1]=0;
+  return result;
+}
+
+int handle_login(unsigned char* message, connection_state* state_p)
+{
+  login_password* user_input;
+  if(state_p->message_size != sizeof(login_password))
+    return DENIED;
+
+  user_input = (login_password*)malloc(sizeof(login_password));
+  memcpy(user_input,message,sizeof(login_password));
+
+  unsigned char* stored_password_hash_hex;
+  if(find_hash_by_login(user_input->login,&stored_password_hash_hex) != OK)
+  {
+    printf("DEBUG: login not found\n");
+    return DENIED; 
+  }
+  printf("DEBUG: login found, hash for passwd: %s\n",stored_password_hash_hex);
+
+  unsigned char input_password_hash[16];
+  int password_length;
+  user_input->password[PASSWORD_SIZE-1] != '\0' ? ( password_length = PASSWORD_SIZE ) : ( password_length = strlen(user_input->password) );
+  md5(user_input->password, password_length, input_password_hash);
+
+  unsigned char* input_password_hash_hex = hex_encode(input_password_hash,16);
+
+  printf("INPUT: %s\n", input_password_hash_hex );
+  printf("STORE: %s\n", stored_password_hash_hex );
+
+  if(cmp(input_password_hash_hex,stored_password_hash_hex,32)!=0)
+  {
+    return DENIED;
+  }
+  
+  printf("PASS IS CORRECT!\n");
+  return ACCEPTED;
 }
 
 /* Handle retrieved message.
@@ -382,14 +484,14 @@ int handle_message(unsigned char* message, connection_state* state_p)
   message_type real_message_type;
   unsigned char* data;
 
+  //TODO2
   data = get_data(message);
+  state_p->message_size -= sizeof(message_type);
 
-  message[state_p->message_size] = '\0';
-  printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size-(int)sizeof(message_type), data);
+  printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size, data);
 
   real_message_type = get_message_type(message); 
 
-  u_int16_t len;
 
   switch(real_message_type)
   {
@@ -397,11 +499,30 @@ int handle_message(unsigned char* message, connection_state* state_p)
       if(state_p->current_state == CONNECTION_ACCEPTED)
       {
         secure_connection(data, state_p);
-        state_p->current_state == CONNECTION_SECURED;
+        state_p->current_state = CONNECTION_SECURED;
       } 
       break;
     case SECURED:
-      decrypt_message(data, state_p->message_size-(int)sizeof(message_type),state_p,&len );
+      if(state_p->current_state == CONNECTION_SECURED)
+      {
+        u_int16_t len;
+        unsigned char* decrypted_message = decrypt_message(data, state_p->message_size,state_p,&len);
+        state_p->message_size=len;
+        handle_message(decrypted_message,state_p);
+      }break;
+    case WANT_LOGIN:
+      if(state_p->current_state == CONNECTION_SECURED)
+      {
+        if( handle_login(data, state_p) == ACCEPTED )
+          state_p->current_state = CONNECTION_LOGGEDIN;
+        else
+          if(++(state_p->login_attempts) == MAX_ATTEMPTS_TO_LOGIN)
+          {
+            //TODO clean connection
+            state_p->current_state = CONNECTION_REFUSED;
+          }
+      }
+      break;
     default:
       return ERROR;
   }

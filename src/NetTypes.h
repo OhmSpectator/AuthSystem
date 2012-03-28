@@ -16,11 +16,18 @@ typedef struct data
   size_t len;
 } Data;
 
+typedef struct lp
+{
+  unsigned char login[20];
+  unsigned char password[20];
+} login_password;
+
 typedef enum m_type           
 {
   DH_TAKE_BASE,
   DH_TAKE_PUB_KEY,
   SECURED,
+  WANT_LOGIN,
   UNKNOWN_TYPE
 } message_type;  
 

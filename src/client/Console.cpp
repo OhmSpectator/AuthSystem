@@ -1,10 +1,11 @@
 #include <arpa/inet.h>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <netinet/in.h>
 #include <string>
 #include <sys/socket.h>
-
+#include "../NetTypes.h"
 #include "Console.h"
 
 using namespace std;
@@ -45,6 +46,22 @@ const char* Console::get_server_port()
       correct_port = true;
   }
   return result.c_str();
+}
+
+login_password* Console::ask_for_logpass()
+{
+  login_password* result = new login_password;
+  memset(result->login,0,20);
+  memset(result->password,0,20);
+  string login;
+  string password;
+  cout << "Enter login: \n";
+  cin >> login;
+  cout << "Enter password: \n";
+  cin >> password;
+  memcpy(result->login, login.c_str(),login.length());
+  memcpy(result->password, password.c_str(), password.length());  
+  return result;
 }
 
 string Console::ask_for_message()

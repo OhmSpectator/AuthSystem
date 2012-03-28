@@ -7,12 +7,23 @@
 #define KNOWN 1
 #define UNKNOWN 0
 
+#define ACCEPTED 1
+#define DENIED 0
+
+#define MAX_ATTEMPTS_TO_LOGIN 3
+
+#define LOGIN_SIZE 20
+#define PASSWORD_SIZE 20
+
+
 #define BUFFER_SIZE 1024
 
 typedef enum s_id
 {
   CONNECTION_ACCEPTED,
-  CONNECTION_SECURED
+  CONNECTION_REFUSED,
+  CONNECTION_SECURED,
+  CONNECTION_LOGGEDIN,
 } state_id;
 
 typedef struct c_state
@@ -45,6 +56,9 @@ typedef struct c_state
 
   /*AES context*/
   aes_context* aes_info;
+
+  /*Number of attempts to login*/
+  int login_attempts;
 
 } connection_state;
 
