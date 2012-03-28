@@ -28,6 +28,9 @@ typedef enum m_type
   DH_TAKE_PUB_KEY,
   SECURED,
   WANT_LOGIN,
+  WELCOME,
+  RETRY,
+  STOP,
   UNKNOWN_TYPE
 } message_type;  
 

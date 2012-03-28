@@ -25,7 +25,7 @@ const char* Console::get_server_addr()
   bool correct_addr = false;
   while( !correct_addr )
   {
-    cout << "Enter the Server address: \n";
+    cout << "Enter the Server address: ";
     cin >> result;
     if( inet_aton( result.c_str(), NULL ) != 0 )
       correct_addr = true;
@@ -39,7 +39,7 @@ const char* Console::get_server_port()
   bool correct_port = false;
   while( !correct_port )
   {
-    cout << "Enter the Server port: \n";
+    cout << "Enter the Server port: ";
     cin >> result;
     long buffer = atol( result.c_str() );
     if( buffer > 0 && buffer < 65538  )
@@ -55,9 +55,9 @@ login_password* Console::ask_for_logpass()
   memset(result->password,0,20);
   string login;
   string password;
-  cout << "Enter login: \n";
+  cout << "Enter login: ";
   cin >> login;
-  cout << "Enter password: \n";
+  cout << "Enter password: ";
   cin >> password;
   memcpy(result->login, login.c_str(),login.length());
   memcpy(result->password, password.c_str(), password.length());  
@@ -67,7 +67,7 @@ login_password* Console::ask_for_logpass()
 string Console::ask_for_message()
 {
   string result;
-  cout << "Enter a message for server: \n";
+  cout << "Enter a message for server: ";
   cin >> result;
   return result;
 }

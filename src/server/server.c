@@ -118,6 +118,12 @@ unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, conn
   memcpy(result, (unsigned char*)(IV),sizeof(IV));
   memcpy(result + sizeof(IV), (unsigned char*)(&extra_length), sizeof(u_int16_t));
   memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
+
+  int j;
+  for( j=0; j<16; j++ )
+    printf("%02x",IV[j]);
+  printf("\n");
+
   if(extra_length != 0)
     memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
   int i;
@@ -183,6 +189,7 @@ int send_message(Socket dst, unsigned char* data, u_int16_t length, message_type
   u_int16_t new_length;
   unsigned char buffer[length + sizeof(message_type)];
   unsigned char* encrypted_message;
+  printf("TYPE: %d, RETRY: %d\n", type, RETRY);
   memcpy(buffer, (unsigned char*)(&type), sizeof(message_type));
   memcpy(buffer + sizeof(message_type), data, length);
   encrypted_message = encrypt_message(buffer, length + sizeof(message_type), state_p, &new_length);
@@ -451,21 +458,13 @@ int handle_login(unsigned char* message, connection_state* state_p)
 
   unsigned char* stored_password_hash_hex;
   if(find_hash_by_login(user_input->login,&stored_password_hash_hex) != OK)
-  {
-    printf("DEBUG: login not found\n");
     return DENIED; 
-  }
-  printf("DEBUG: login found, hash for passwd: %s\n",stored_password_hash_hex);
-
   unsigned char input_password_hash[16];
   int password_length;
   user_input->password[PASSWORD_SIZE-1] != '\0' ? ( password_length = PASSWORD_SIZE ) : ( password_length = strlen(user_input->password) );
   md5(user_input->password, password_length, input_password_hash);
 
   unsigned char* input_password_hash_hex = hex_encode(input_password_hash,16);
-
-  printf("INPUT: %s\n", input_password_hash_hex );
-  printf("STORE: %s\n", stored_password_hash_hex );
 
   if(cmp(input_password_hash_hex,stored_password_hash_hex,32)!=0)
   {
@@ -514,12 +513,24 @@ int handle_message(unsigned char* message, connection_state* state_p)
       if(state_p->current_state == CONNECTION_SECURED)
       {
         if( handle_login(data, state_p) == ACCEPTED )
+        {
+          unsigned char* dummy = "\0";
+          send_message(state_p->socket,dummy,1,WELCOME,state_p);
           state_p->current_state = CONNECTION_LOGGEDIN;
+        } 
         else
           if(++(state_p->login_attempts) == MAX_ATTEMPTS_TO_LOGIN)
           {
             //TODO clean connection
+            unsigned char* dummy = "\0";
+            send_message(state_p->socket,dummy,1,STOP,state_p);
             state_p->current_state = CONNECTION_REFUSED;
+          }
+          else
+          {
+            printf( "I was here!\n" );
+            unsigned char* dummy = "\0";
+            send_message(state_p->socket,dummy,1,RETRY,state_p);
           }
       }
       break;

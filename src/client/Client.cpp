@@ -27,6 +27,8 @@ Client::Client()
   aes_info = new aes_context;
   entropy_context entropy_info;
   entropy_init(&entropy_info);
+  can_retry = true;
+  loggedin = false;
   ctr_drbg_init(&generator_info, entropy_func, &entropy_info, (unsigned char*)"STRING", 6);
   ctr_drbg_set_prediction_resistance(&generator_info, CTR_DRBG_PR_OFF);
   client_socket = socket( AF_INET, SOCK_STREAM, 0 );
@@ -163,7 +165,10 @@ unsigned char* Client::decrypt_message(unsigned char* message, u_int16_t data_si
   memcpy(IV, message, sizeof(IV));
 
   aes_setkey_dec(aes_info, aes_key.data, aes_key.len<<3);
-  aes_crypt_cbc(aes_info, AES_DECRYPT, data_size - sizeof(IV), IV, message + sizeof(IV), buffer);
+  if( aes_crypt_cbc(aes_info, AES_DECRYPT, data_size - sizeof(IV), IV, message + sizeof(IV), buffer) != 0 )
+  {
+    cout << "Error in decrypt!\n";
+  }
 
   u_int16_t extra_length = 0;
   memcpy((unsigned char*)(&extra_length), buffer, sizeof(u_int16_t));
@@ -259,12 +264,6 @@ unsigned char* Client::get_message(size_t* len)
         memcpy(result, buffer, message_size);
         message_received = true;
         *len = message_size;
-
-        /*cout << "RCV: " << endl;
-          for(int i = 0; i < message_size; i++)
-          cout << result[i];
-          cout << endl;*/
-
       }
 
     }

@@ -32,6 +32,12 @@ class Client
   
   //TODO make private
   login_password* login_data;
+  unsigned char* get_message(size_t*);
+  message_type get_message_type(unsigned char* msg);
+  unsigned char* decrypt_message(unsigned char* msg, u_int16_t size, u_int16_t* new_size);
+  unsigned char* get_data(unsigned char* msg);
+  bool can_retry;
+  bool loggedin;
 
   private:
 
@@ -41,12 +47,8 @@ class Client
   ctr_drbg_context generator_info;
   Data aes_key;
 
-  message_type get_message_type(unsigned char* msg);
-  unsigned char* get_data(unsigned char* msg);
   unsigned char* encrypt_message(unsigned char* msg, u_int16_t size, u_int16_t* new_size);
-  unsigned char* decrypt_message(unsigned char* msg, u_int16_t size, u_int16_t* new_size);
   struct addrinfo* get_addrinfo( const char* addr, const char* port );
-  unsigned char* get_message(size_t*);
   void send_raw_message( unsigned char* data, u_int16_t length, message_type=UNKNOWN_TYPE );
   bool secure_connection();
   dh_base* generate_dh_base();
