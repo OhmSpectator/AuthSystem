@@ -31,6 +31,8 @@ int main()
           {
             cout << "You are in!\n";
             client.loggedin = true;
+            unsigned char* tmp = (unsigned char*)("\0");
+            //client.send_message(tmp, 1, DIE);
             break;
           }
         case RETRY:

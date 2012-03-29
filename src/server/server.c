@@ -1,6 +1,7 @@
 #include <sys/types.h>
 
 #include "server.h"
+#include "logger.h"
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -25,6 +26,8 @@
 
 #define OK 0
 #define ERROR -1
+
+#define DESTRUCTOR 241
 
 /* Max number of connections */
 #define MAX_CONNECTIONS_NUM 1024
@@ -119,11 +122,6 @@ unsigned char* encrypt_message(unsigned char* message, u_int16_t data_size, conn
   memcpy(result + sizeof(IV), (unsigned char*)(&extra_length), sizeof(u_int16_t));
   memcpy(result + sizeof(IV) + sizeof(u_int16_t), message, data_size);
 
-  int j;
-  for( j=0; j<16; j++ )
-    printf("%02x",IV[j]);
-  printf("\n");
-
   if(extra_length != 0)
     memset(result + sizeof(IV) + sizeof(u_int16_t) + data_size, 0, extra_length );
   int i;
@@ -152,7 +150,7 @@ unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, conn
 
   *new_length = data_size - sizeof(IV) - sizeof(u_int16_t) - extra_length;
 
-  result = (unsigned char*)malloc(*new_length);
+  result = (unsigned char*)malloc(*new_length+1);
   memcpy(result, buffer + sizeof(u_int16_t), *new_length);
 
   result[*new_length] = '\0';
@@ -382,6 +380,8 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   state_p->aes_key.len = len;
   state_p->aes_info = (aes_context*)malloc(sizeof(aes_context));
   state_p->login_attempts = 0;
+  dhm_free(state_p->dh_info);
+  free(state_p->dh_info);
   return OK;
 }
 
@@ -450,15 +450,26 @@ unsigned char* hex_encode(unsigned char* data, size_t length)
 int handle_login(unsigned char* message, connection_state* state_p)
 {
   login_password* user_input;
+  unsigned char log_string[1000];
+
   if(state_p->message_size != sizeof(login_password))
     return DENIED;
 
   user_input = (login_password*)malloc(sizeof(login_password));
   memcpy(user_input,message,sizeof(login_password));
 
+  
+  int login_length;
+  user_input->login[LOGIN_SIZE-1] != '\0' ? (login_length = LOGIN_SIZE) : (login_length = strlen(user_input->login));
+  strncpy(log_string, user_input->login, login_length);
+  log_string[login_length] = '\0';
+
   unsigned char* stored_password_hash_hex;
   if(find_hash_by_login(user_input->login,&stored_password_hash_hex) != OK)
+  {
+    free(user_input);
     return DENIED; 
+  }
   unsigned char input_password_hash[16];
   int password_length;
   user_input->password[PASSWORD_SIZE-1] != '\0' ? ( password_length = PASSWORD_SIZE ) : ( password_length = strlen(user_input->password) );
@@ -468,10 +479,19 @@ int handle_login(unsigned char* message, connection_state* state_p)
 
   if(cmp(input_password_hash_hex,stored_password_hash_hex,32)!=0)
   {
+    free(user_input);
+    free(input_password_hash_hex);
+    free(stored_password_hash_hex);
+    strcpy(log_string + login_length," tried to log in with invalid password");
+    log_event(time(NULL),ERROR_MSG, log_string);
     return DENIED;
   }
-  
-  printf("PASS IS CORRECT!\n");
+
+  strcpy(log_string+login_length," logged in");
+  log_event(time(NULL), INFO_MSG, log_string);
+  free(input_password_hash_hex);
+  free(stored_password_hash_hex);
+  free(user_input);
   return ACCEPTED;
 }
 
@@ -489,12 +509,13 @@ int handle_message(unsigned char* message, connection_state* state_p)
 
   printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size, data);
 
-  real_message_type = get_message_type(message); 
-
+  real_message_type = get_message_type(message);
+  printf("Msg type %d\n", real_message_type); 
 
   switch(real_message_type)
   {
     case DH_TAKE_BASE:
+      printf("DH_TAKE_BASE-%d\n", real_message_type);
       if(state_p->current_state == CONNECTION_ACCEPTED)
       {
         secure_connection(data, state_p);
@@ -502,14 +523,22 @@ int handle_message(unsigned char* message, connection_state* state_p)
       } 
       break;
     case SECURED:
-      if(state_p->current_state == CONNECTION_SECURED)
+      printf("SECURED=%d\n", real_message_type);
+      if(state_p->current_state == CONNECTION_SECURED || state_p->current_state == CONNECTION_LOGGEDIN)
       {
         u_int16_t len;
         unsigned char* decrypted_message = decrypt_message(data, state_p->message_size,state_p,&len);
         state_p->message_size=len;
-        handle_message(decrypted_message,state_p);
-      }break;
+        if( handle_message(decrypted_message,state_p) == DESTRUCTOR )
+        { 
+          free(decrypted_message);
+          return DESTRUCTOR;
+        }
+        free(decrypted_message);
+      }
+      break;
     case WANT_LOGIN:
+      printf("WANT_LOGIN-%d\n", real_message_type);
       if(state_p->current_state == CONNECTION_SECURED)
       {
         if( handle_login(data, state_p) == ACCEPTED )
@@ -534,7 +563,14 @@ int handle_message(unsigned char* message, connection_state* state_p)
           }
       }
       break;
+    case DIE:
+      if(state_p->current_state == CONNECTION_LOGGEDIN )
+      {
+        printf("DIE-%d\n", real_message_type);
+        return DESTRUCTOR;
+      }
     default:
+      printf("OTHER-%d\n", real_message_type);
       return ERROR;
   }
   return OK;
@@ -543,9 +579,9 @@ int handle_message(unsigned char* message, connection_state* state_p)
 /* Process of server work.
    Returns OK(0), if no errers occured during work. Otherwise returns ERROR(-1)
  */
-int run_server( int server_socket )
+int run_server(int server_socket)
 {
-  int result;
+  int result = OK;
   int i;
 
   /* Temprory storage for a new client socket. Th number be stored in struct of all client sockets */
@@ -563,6 +599,9 @@ int run_server( int server_socket )
   /* Info about our connections */
   /* Array of connections states.  */
   connection_state* connections[MAX_CONNECTIONS_NUM];
+
+  log_event(time(NULL), INFO_MSG, "server started" );
+
   /* Current connectons number */
   u_int16_t connections_number = 0;
 
@@ -615,8 +654,12 @@ int run_server( int server_socket )
           /* Get info about new connection and remember it. */
           else
           {
+            unsigned char log_string[1000];
+            strcpy(log_string,"new connection");
+            log_event(time(NULL), INFO_MSG, log_string);
             printf( "New client connected! It's: %s\n", inet_ntoa( new_client_info.sin_addr ) );
             connections[connections_number] = ( connection_state* )malloc( sizeof( connection_state ) );
+            connections[connections_number]->address = new_client_info.sin_addr;
             connections[connections_number]->socket = new_client_socket;
             connections[connections_number]->message_size_known = UNKNOWN;
             connections[connections_number]->current_state = CONNECTION_ACCEPTED;
@@ -669,7 +712,17 @@ int run_server( int server_socket )
             if( current_message_size >= current_state_p->message_size )
             {
               recv( current_descriptor, buffer, current_state_p->message_size, 0 );
-              handle_message(buffer,current_state_p);
+              if( handle_message(buffer,current_state_p) == DESTRUCTOR )
+              {
+                int i;
+                for(i = 0; i < connections_number; i++ )
+                {
+                  free(connections[i]->aes_key.data);
+                  free(connections[i]->aes_info);
+                  free(connections[i]);
+                  return 0;
+                }
+              }
               current_state_p->message_size_known= UNKNOWN;
             }
           }
@@ -688,30 +741,30 @@ int run_server( int server_socket )
 int main( int argc, char* argv[] )
 {
   u_int16_t port;
-  int socket;
+  Socket socket;
 
   port = get_port_from_params( argc, argv );
   if( port == 0 )
   {
-    printf( "ERROR: failed to get port from options!\nTerminated!\n" );
+    log_event(time(NULL), ERROR_MSG, "failed to get port from options" );
     exit( ERROR );
   }
 
   socket = make_socket( port );
   if( socket == ERROR  )
   {
-    printf( "ERROR: failed to make working socket!\nTerminated!\n" );
+    log_event(time(NULL), ERROR_MSG, "failed to make working socket" );
     exit( ERROR );
   }
 
-  if( run_server( socket ) == ERROR )
+  if( run_server(socket) == ERROR )
   {
-    printf( "ERROR: error occured during server work!\nTerminated!\n" );
+    log_event(time(NULL), ERROR_MSG, "error occured during server work" );
     exit( ERROR );
   }
 
   close( socket );
-  printf( "The server has worked in a normal mode, no run-time errors were found.\nTerminated!\n" );
+  log_event(time(NULL), INFO_MSG, "The server has worked in a normal mode, no run-time errors were found" );
 
   return OK;
 }

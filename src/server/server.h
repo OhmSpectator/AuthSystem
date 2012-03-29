@@ -60,6 +60,8 @@ typedef struct c_state
   /*Number of attempts to login*/
   int login_attempts;
 
+  struct in_addr address;
+
 } connection_state;
 
 

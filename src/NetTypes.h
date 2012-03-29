@@ -31,6 +31,7 @@ typedef enum m_type
   WELCOME,
   RETRY,
   STOP,
+  DIE,
   UNKNOWN_TYPE
 } message_type;  
 
