@@ -154,7 +154,6 @@ unsigned char* decrypt_message(unsigned char* message, u_int16_t data_size, conn
   memcpy(result, buffer + sizeof(u_int16_t), *new_length);
 
   result[*new_length] = '\0';
-  printf("DECRYPTED: %s\n", result+sizeof(message_type));
 
   free(buffer);
   return result;
@@ -176,7 +175,7 @@ int send_raw_message(Socket dst, unsigned char* data, u_int16_t data_length, mes
 
   if(write(dst, buffer, message_length + sizeof(u_int16_t)) < 0)
   {
-    printf( "ERROR: can not send message!" );
+    log_event(time(NULL),ERROR, "can not send message", NULL);
     return ERROR;
   }
   return OK;
@@ -187,7 +186,6 @@ int send_message(Socket dst, unsigned char* data, u_int16_t length, message_type
   u_int16_t new_length;
   unsigned char buffer[length + sizeof(message_type)];
   unsigned char* encrypted_message;
-  printf("TYPE: %d, RETRY: %d\n", type, RETRY);
   memcpy(buffer, (unsigned char*)(&type), sizeof(message_type));
   memcpy(buffer + sizeof(message_type), data, length);
   encrypted_message = encrypt_message(buffer, length + sizeof(message_type), state_p, &new_length);
@@ -216,9 +214,6 @@ int create_socket(  )
    */
   result = socket( PF_INET, SOCK_STREAM, protocol_sys_number );
 
-  if( result == -1 )
-    printf( "ERROR: failed to create socket!\n" );
-
   return result;
 }
 
@@ -239,10 +234,9 @@ int bind_socket( int socket, u_int16_t port )
   socket_address.sin_port = port;
 
   /* bind socket descriptor to a given port on all net interfaces in a system */
-  if( bind( socket, ( struct sockaddr* )( &socket_address ), sizeof( socket_address ) ) == -1  )
-    printf( "ERROR: failed to bind socket on port %i! %s!\n", ntohs( port ), strerror( errno ) );
-  else
-    result = OK;
+  bind( socket, ( struct sockaddr* )( &socket_address ), sizeof( socket_address ));
+  
+  result = OK;
 
   return result;
 }
@@ -398,7 +392,10 @@ int find_hash_by_login(unsigned char* login, unsigned char** hash)
 {
   FILE* psswd_file;
   if((psswd_file = fopen("psswd", "r")) == NULL)
+  {
+    log_event(time(NULL), ERROR_MSG, "psswd file access error", NULL);
     return ERROR;
+  }
   while(!feof(psswd_file))
   {
     unsigned char* current_login = (unsigned char*)malloc(LOGIN_SIZE);
@@ -453,7 +450,10 @@ int handle_login(unsigned char* message, connection_state* state_p)
   unsigned char log_string[1000];
 
   if(state_p->message_size != sizeof(login_password))
+  {
+    log_event(time(NULL),INFO_MSG,"bad secured message recieved", inet_ntoa(state_p->address));
     return DENIED;
+  }
 
   user_input = (login_password*)malloc(sizeof(login_password));
   memcpy(user_input,message,sizeof(login_password));
@@ -468,6 +468,7 @@ int handle_login(unsigned char* message, connection_state* state_p)
   if(find_hash_by_login(user_input->login,&stored_password_hash_hex) != OK)
   {
     free(user_input);
+    log_event(time(NULL),INFO_MSG,"non-valid login info recieved", inet_ntoa(state_p->address));
     return DENIED; 
   }
   unsigned char input_password_hash[16];
@@ -483,12 +484,12 @@ int handle_login(unsigned char* message, connection_state* state_p)
     free(input_password_hash_hex);
     free(stored_password_hash_hex);
     strcpy(log_string + login_length," tried to log in with invalid password");
-    log_event(time(NULL),ERROR_MSG, log_string);
+    log_event(time(NULL),INFO_MSG, log_string, inet_ntoa(state_p->address));
     return DENIED;
   }
 
   strcpy(log_string+login_length," logged in");
-  log_event(time(NULL), INFO_MSG, log_string);
+  log_event(time(NULL), INFO_MSG, log_string, inet_ntoa(state_p->address) );
   free(input_password_hash_hex);
   free(stored_password_hash_hex);
   free(user_input);
@@ -507,29 +508,28 @@ int handle_message(unsigned char* message, connection_state* state_p)
   data = get_data(message);
   state_p->message_size -= sizeof(message_type);
 
-  printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size, data);
+  //printf("DEBUG: Got full new message! (size = %d)\nDEBUG: %s\n", state_p->message_size, data);
 
   real_message_type = get_message_type(message);
-  printf("Msg type %d\n", real_message_type); 
 
   switch(real_message_type)
   {
     case DH_TAKE_BASE:
-      printf("DH_TAKE_BASE-%d\n", real_message_type);
       if(state_p->current_state == CONNECTION_ACCEPTED)
       {
+        log_event(time(NULL),INFO_MSG,"AES initialization started", inet_ntoa(state_p->address));
         secure_connection(data, state_p);
         state_p->current_state = CONNECTION_SECURED;
+        log_event(time(NULL),INFO_MSG,"AES initialized", inet_ntoa(state_p->address));
       } 
       break;
     case SECURED:
-      printf("SECURED=%d\n", real_message_type);
       if(state_p->current_state == CONNECTION_SECURED || state_p->current_state == CONNECTION_LOGGEDIN)
       {
         u_int16_t len;
         unsigned char* decrypted_message = decrypt_message(data, state_p->message_size,state_p,&len);
         state_p->message_size=len;
-        if( handle_message(decrypted_message,state_p) == DESTRUCTOR )
+        if( handle_message(decrypted_message,state_p) == DESTRUCTOR)
         { 
           free(decrypted_message);
           return DESTRUCTOR;
@@ -538,9 +538,9 @@ int handle_message(unsigned char* message, connection_state* state_p)
       }
       break;
     case WANT_LOGIN:
-      printf("WANT_LOGIN-%d\n", real_message_type);
       if(state_p->current_state == CONNECTION_SECURED)
       {
+        log_event(time(NULL),INFO_MSG,"attempt to log in", inet_ntoa(state_p->address));
         if( handle_login(data, state_p) == ACCEPTED )
         {
           unsigned char* dummy = "\0";
@@ -557,7 +557,6 @@ int handle_message(unsigned char* message, connection_state* state_p)
           }
           else
           {
-            printf( "I was here!\n" );
             unsigned char* dummy = "\0";
             send_message(state_p->socket,dummy,1,RETRY,state_p);
           }
@@ -566,11 +565,11 @@ int handle_message(unsigned char* message, connection_state* state_p)
     case DIE:
       if(state_p->current_state == CONNECTION_LOGGEDIN )
       {
-        printf("DIE-%d\n", real_message_type);
+        log_event(time(NULL),INFO_MSG,"stop message recieved", inet_ntoa(state_p->address));
         return DESTRUCTOR;
       }
     default:
-      printf("OTHER-%d\n", real_message_type);
+      log_event(time(NULL),INFO_MSG,"corrupted message recieved", inet_ntoa(state_p->address));
       return ERROR;
   }
   return OK;
@@ -600,7 +599,7 @@ int run_server(int server_socket)
   /* Array of connections states.  */
   connection_state* connections[MAX_CONNECTIONS_NUM];
 
-  log_event(time(NULL), INFO_MSG, "server started" );
+  log_event(time(NULL), INFO_MSG, "server started", NULL );
 
   /* Current connectons number */
   u_int16_t connections_number = 0;
@@ -630,7 +629,7 @@ int run_server(int server_socket)
     /* Get sets of descriptors that are REALY ready for I/O operations */
     if( select( max_socket_descriptor + 1, &sockets_ready_to_read, &sockets_ready_to_write, NULL, &time_to_wait ) == -1 )
     {
-      printf( "ERROR: Cannot test sockets for I/O operations!\n" );
+      log_event(time(NULL),INFO_MSG,"cannot test sockets for I/O operations", NULL);
       result =  ERROR;
       break;
     }
@@ -647,7 +646,7 @@ int run_server(int server_socket)
           new_client_socket = accept( server_socket, ( struct sockaddr* )( &new_client_info ), &client_info_size );
           if( new_client_socket == -1 )
           {
-            printf( "ERROR: cannot accept a new connection!\n" );
+            log_event(time(NULL),INFO_MSG,"ccannot accept a new connections", NULL);
             result = ERROR;
             break;
           }
@@ -656,8 +655,7 @@ int run_server(int server_socket)
           {
             unsigned char log_string[1000];
             strcpy(log_string,"new connection");
-            log_event(time(NULL), INFO_MSG, log_string);
-            printf( "New client connected! It's: %s\n", inet_ntoa( new_client_info.sin_addr ) );
+            log_event(time(NULL), INFO_MSG, log_string, inet_ntoa(new_client_info.sin_addr));
             connections[connections_number] = ( connection_state* )malloc( sizeof( connection_state ) );
             connections[connections_number]->address = new_client_info.sin_addr;
             connections[connections_number]->socket = new_client_socket;
@@ -685,7 +683,7 @@ int run_server(int server_socket)
           /* Find info about this connection */
           if( ( socket_id = get_id_by_socket( current_descriptor, &connections, connections_number ) ) == ERROR )
           {
-            printf( "ERROR: Cannot find connection state!\n"  );
+            log_event(time(NULL),INFO_MSG,"cannot find connection states", NULL);
             result = ERROR;
             break;
           }
@@ -746,25 +744,25 @@ int main( int argc, char* argv[] )
   port = get_port_from_params( argc, argv );
   if( port == 0 )
   {
-    log_event(time(NULL), ERROR_MSG, "failed to get port from options" );
+    log_event(time(NULL), ERROR_MSG, "failed to get port from options", NULL );
     exit( ERROR );
   }
 
   socket = make_socket( port );
   if( socket == ERROR  )
   {
-    log_event(time(NULL), ERROR_MSG, "failed to make working socket" );
+    log_event(time(NULL), ERROR_MSG, "failed to make working socket", NULL );
     exit( ERROR );
   }
 
   if( run_server(socket) == ERROR )
   {
-    log_event(time(NULL), ERROR_MSG, "error occured during server work" );
+    log_event(time(NULL), ERROR_MSG, "error occured during server work", NULL );
     exit( ERROR );
   }
 
   close( socket );
-  log_event(time(NULL), INFO_MSG, "The server has worked in a normal mode, no run-time errors were found" );
+  log_event(time(NULL), INFO_MSG, "The server has worked in a normal mode, no run-time errors were found", NULL );
 
   return OK;
 }

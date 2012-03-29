@@ -3,7 +3,7 @@
 #include <time.h>
 #include "logger.h"
 
-int log_event(time_t time, event_type type, unsigned char* text)
+int log_event(time_t time, event_type type, unsigned char* text, unsigned char* ip_string)
 {
 
   FILE* log_file;
@@ -20,24 +20,44 @@ int log_event(time_t time, event_type type, unsigned char* text)
     case DEBUG_MSG:
       strcpy(buffer + strlen("[") + strlen(time_str) - 1, "] DEBUG: ");
       strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: "), text);
-      buffer[strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: ") + strlen(text) ] = '\0';
+      if(ip_string != NULL )
+      {
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: ") + strlen(text), ". Source: " );
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: ") + strlen(text) + strlen(". Source: "), ip_string );
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: ") + strlen(text) + strlen(". Source: ") + strlen(ip_string) ] = '\0';
+      }
+      else
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] DEBUG: ") + strlen(text) ] = '\0';
       break;
     case INFO_MSG:
       strcpy(buffer + strlen("[") + strlen(time_str) - 1, "] INFO: ");
       strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] INFO: "), text);
-      buffer[strlen("[") + strlen(time_str) - 1 + strlen("] INFO: ") + strlen(text) ] = '\0';
+      if(ip_string != NULL )
+      {
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] INFO: ") + strlen(text), ". Source: " );
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] INFO: ") + strlen(text) + strlen(". Source: "), ip_string );
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] INFO: ") + strlen(text) + strlen(". Source: ") + strlen(ip_string) ] = '\0';
+      }
+      else
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] INFO: ") + strlen(text) ] = '\0';
       break;
     case ERROR_MSG:
       strcpy(buffer + strlen("[") + strlen(time_str) - 1, "] ERROR: ");
       strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: "), text);
-      buffer[strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: ") + strlen(text) ] = '\0';
+      if(ip_string != NULL )
+      {
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: ") + strlen(text), ". Source: " );
+        strcpy(buffer + strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: ") + strlen(text) + strlen(". Source: "), ip_string );
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: ") + strlen(text) + strlen(". Source: ") + strlen(ip_string) ] = '\0';
+      }
+      else
+        buffer[strlen("[") + strlen(time_str) - 1 + strlen("] ERROR: ") + strlen(text) ] = '\0';
       break;
   }
 
   printf("%s\n", buffer);
 
-  if(fputs(buffer, log_file) == EOF)
-    printf("DEBUG: can\'t cppend message\n");
+  fputs(buffer, log_file)
   fputc('\n', log_file);
   fclose(log_file);
 }

@@ -17,7 +17,7 @@ typedef struct logger_t
   FILE* log_file;
 } logger;
 
-int log_event(time_t time, event_type type, unsigned char* text);
+int log_event(time_t time, event_type type, unsigned char* text, unsigned char* ip_string);
 
 logger* create_logger(const char* filename);
 
