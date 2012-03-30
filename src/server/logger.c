@@ -57,7 +57,7 @@ int log_event(time_t time, event_type type, unsigned char* text, unsigned char* 
 
   printf("%s\n", buffer);
 
-  fputs(buffer, log_file)
+  fputs(buffer, log_file);
   fputc('\n', log_file);
   fclose(log_file);
 }
