@@ -300,7 +300,6 @@ u_int16_t get_port_from_params( int argc, char* argv[] )
   return result;
 }
 
-/*TODO test*/
 /* Compacts array, deleting unused element */
 void compact_array( void*(*array_p)[], int max_index, int deleting_index )
 {
@@ -379,6 +378,9 @@ int secure_connection(unsigned char* data, connection_state* state_p)
   return OK;
 }
 
+
+/*Compare two strings of a given length
+  Returns 0 if the are the same*/
 int cmp(unsigned char* a, unsigned char* b, size_t len)
 {
   int i;
@@ -387,6 +389,10 @@ int cmp(unsigned char* a, unsigned char* b, size_t len)
       return 1;
   return 0;
 }
+
+/*Looks for a login in a passwd file. Returns OK if it is a valid login.
+  If there is no such login - returns ERROR. If no psswd - returns ERROR.
+*/
 
 int find_hash_by_login(unsigned char* login, unsigned char** hash)
 {
@@ -433,6 +439,11 @@ int find_hash_by_login(unsigned char* login, unsigned char** hash)
   return ERROR;
 }
 
+/*Encode char string to a hex string.
+  For every char in data there will be to bytes in output string.
+  Allocates mem inside the func.
+*/
+
 unsigned char* hex_encode(unsigned char* data, size_t length)
 {
   unsigned char* result;
@@ -444,6 +455,10 @@ unsigned char* hex_encode(unsigned char* data, size_t length)
   return result;
 }
 
+/*Handle a login attempt.
+  Looks for a login, if there is such login - test the password. Passwords compares by MD5 hases.
+  In case of bad message (bad data or non-valid login/password) returns DENIED.
+ */
 int handle_login(unsigned char* message, connection_state* state_p)
 {
   login_password* user_input;
@@ -458,7 +473,6 @@ int handle_login(unsigned char* message, connection_state* state_p)
   user_input = (login_password*)malloc(sizeof(login_password));
   memcpy(user_input,message,sizeof(login_password));
 
-  
   int login_length;
   user_input->login[LOGIN_SIZE-1] != '\0' ? (login_length = LOGIN_SIZE) : (login_length = strlen(user_input->login));
   strncpy(log_string, user_input->login, login_length);
